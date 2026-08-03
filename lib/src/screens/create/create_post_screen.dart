@@ -1,11 +1,16 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:photo_manager/photo_manager.dart';
 import 'package:video_player/video_player.dart' as video;
 
 import '../../constants.dart';
-import '../../data/mock_data.dart';
 import '../../models/post.dart';
 import '../../models/user.dart';
 import '../../services/feed_service.dart';
+import '../../services/local_post_store.dart';
+import '../../widgets/media_image.dart';
 import 'post_editor_screen.dart';
 
 class _MediaSelection {
@@ -53,11 +58,57 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
   _MediaSelection? _selected;
   final _captionController = TextEditingController();
   bool _sharing = false;
+  bool _loadingGallery = true;
+  String? _galleryError;
+  List<AssetEntity> _assets = const [];
+  final ImagePicker _imagePicker = ImagePicker();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadGallery();
+  }
 
   @override
   void dispose() {
     _captionController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadGallery() async {
+    try {
+      final permission = await PhotoManager.requestPermissionExtend();
+      if (!permission.hasAccess) {
+        setState(() {
+          _loadingGallery = false;
+          _galleryError = 'Photo access denied';
+        });
+        return;
+      }
+      final albums = await PhotoManager.getAssetPathList(
+        type: RequestType.image,
+        onlyAll: true,
+      );
+      if (albums.isEmpty) {
+        setState(() {
+          _loadingGallery = false;
+          _galleryError = 'No photos found';
+        });
+        return;
+      }
+      final assets = await albums.first.getAssetListPaged(page: 0, size: 60);
+      if (!mounted) return;
+      setState(() {
+        _assets = assets;
+        _loadingGallery = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _loadingGallery = false;
+        _galleryError = 'Failed to load photos';
+      });
+    }
   }
 
   Future<void> _openEditor({required String url, required bool isVideo}) async {
@@ -77,22 +128,39 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
     });
   }
 
+  Future<void> _pickImage(ImageSource source) async {
+    final picked = await _imagePicker.pickImage(
+      source: source,
+      maxWidth: 2048,
+      imageQuality: 90,
+    );
+    if (picked == null || !mounted) return;
+    await _openEditor(url: picked.path, isVideo: false);
+  }
+
+  Future<void> _pickFromGalleryAsset(AssetEntity asset) async {
+    final file = await asset.file;
+    if (file == null || !mounted) return;
+    await _openEditor(url: file.path, isVideo: false);
+  }
+
   void _share() {
     setState(() => _sharing = true);
-    Future.delayed(const Duration(milliseconds: 400), () {
+    Future.delayed(const Duration(milliseconds: 400), () async {
       if (!mounted) return;
       final selection = _selected!;
-      widget.feedService.addPost(
-        Post(
-          id: 'p${DateTime.now().millisecondsSinceEpoch}',
-          author: widget.currentUser,
-          imageUrl: selection.thumbnail,
-          videoUrl: selection.isVideo ? selection.url : '',
-          caption: _captionController.text.trim(),
-          createdAt: DateTime.now(),
-          isVideo: selection.isVideo,
-        ),
+      final post = Post(
+        id: 'p${DateTime.now().millisecondsSinceEpoch}',
+        author: widget.currentUser,
+        imageUrl: selection.thumbnail,
+        videoUrl: selection.isVideo ? selection.url : '',
+        caption: _captionController.text.trim(),
+        createdAt: DateTime.now(),
+        isVideo: selection.isVideo,
       );
+      widget.feedService.addPost(post);
+      await LocalPostStore.instance.add(post);
+      if (!mounted) return;
       Navigator.of(context).pop();
     });
   }
@@ -147,39 +215,62 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
             mainAxisSpacing: 2,
             crossAxisSpacing: 2,
           ),
-          itemCount: MockDatabase.uploadImages.length + 1,
+          itemCount: _loadingGallery ? 1 : _assets.length + 1,
           itemBuilder: (context, index) {
             if (index == 0) {
               return _Tile(
                 child: Container(
                   color: AppColors.background,
                   alignment: Alignment.center,
-                  child: const Column(
+                  child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.photo_camera_outlined, color: AppColors.textSecondary, size: 32),
-                      SizedBox(height: 4),
+                      const Icon(Icons.photo_camera_outlined, color: AppColors.textSecondary, size: 32),
+                      const SizedBox(height: 4),
                       Text(
                         AppStrings.takePhoto,
-                        style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                        style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
                       ),
                     ],
                   ),
                 ),
-                onTap: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text(AppStrings.cameraMock)),
-                  );
-                },
+                onTap: () => _pickImage(ImageSource.camera),
               );
             }
-            final url = MockDatabase.uploadImages[index - 1];
-            return _Tile(
-              child: Image.network(url, fit: BoxFit.cover),
-              onTap: () => _openEditor(url: url, isVideo: false),
+            if (_loadingGallery) {
+              return Container(
+                color: AppColors.background,
+                alignment: Alignment.center,
+                child: const CircularProgressIndicator(color: AppColors.primary),
+              );
+            }
+            if (_galleryError != null && _assets.isEmpty) {
+              return Container(
+                color: AppColors.background,
+                alignment: Alignment.center,
+                padding: const EdgeInsets.all(12),
+                child: Text(
+                  _galleryError!,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                ),
+              );
+            }
+            final asset = _assets[index - 1];
+            return _GalleryThumbnail(
+              asset: asset,
+              onTap: () => _pickFromGalleryAsset(asset),
             );
           },
         ),
+        if (_galleryError != null && _assets.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+            child: Text(
+              _galleryError!,
+              style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+            ),
+          ),
         const Padding(
           padding: EdgeInsets.fromLTRB(12, 16, 12, 8),
           child: Text(
@@ -237,8 +328,8 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                 borderRadius: BorderRadius.circular(8),
                 child: selection.isVideo
                     ? _VideoPreview(url: selection.url)
-                    : Image.network(
-                        selection.thumbnail,
+                    : MediaImage(
+                        path: selection.thumbnail,
                         fit: BoxFit.contain,
                         errorBuilder: (_, _, _) => Container(
                           color: AppColors.border,
@@ -337,6 +428,34 @@ class _Tile extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: child,
+    );
+  }
+}
+
+class _GalleryThumbnail extends StatelessWidget {
+  const _GalleryThumbnail({required this.asset, required this.onTap});
+
+  final AssetEntity asset;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: FutureBuilder<Uint8List?>(
+        future: asset.thumbnailDataWithSize(const ThumbnailSize(600, 600)),
+        builder: (context, snapshot) {
+          final data = snapshot.data;
+          if (data == null) {
+            return Container(
+              color: AppColors.background,
+              alignment: Alignment.center,
+              child: const Icon(Icons.image_outlined, color: AppColors.textSecondary),
+            );
+          }
+          return Image.memory(data, fit: BoxFit.cover);
+        },
+      ),
     );
   }
 }

@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../constants.dart';
 import '../models/post.dart';
 import 'avatar.dart';
+import 'media_image.dart';
 
 class PostCard extends StatelessWidget {
   const PostCard({
@@ -72,8 +73,8 @@ class PostCard extends StatelessWidget {
         children: [
           AspectRatio(
             aspectRatio: 1,
-            child: Image.network(
-              post.imageUrl,
+            child: MediaImage(
+              path: post.imageUrl,
               fit: BoxFit.cover,
               errorBuilder: (_, _, _) => Container(
                 color: AppColors.border,

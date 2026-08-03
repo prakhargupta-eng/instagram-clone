@@ -27,6 +27,12 @@ class _HomeShellState extends State<HomeShell> {
   AppUser get _currentUser => widget.authService.currentUser!;
 
   @override
+  void initState() {
+    super.initState();
+    _feedService.ensureLocalPostsLoaded(_currentUser);
+  }
+
+  @override
   Widget build(BuildContext context) {
     final screens = [
       HomeScreen(authService: widget.authService, feedService: _feedService),
@@ -153,15 +159,10 @@ class _NavItem extends StatelessWidget {
         child: Center(
           child: Image.asset(
             isSelected ? selectedIcon : icon,
-            width: 18,
-            height: 18,
+            width: 20,
+            height: 20,
             color: color,
             colorBlendMode: BlendMode.srcIn,
-            errorBuilder: (_, _, _) => Icon(
-              Icons.search_outlined,
-              color: color,
-              size: 18,
-            ),
           ),
         ),
       ),

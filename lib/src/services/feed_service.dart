@@ -4,6 +4,7 @@ import '../data/mock_data.dart';
 import '../models/post.dart';
 import '../models/story.dart';
 import '../models/user.dart';
+import 'local_post_store.dart';
 
 class FeedService extends ChangeNotifier {
   final List<Post> _posts = List.of(MockDatabase.posts);
@@ -12,6 +13,17 @@ class FeedService extends ChangeNotifier {
     for (final entry in MockDatabase.follows.entries)
       entry.key: List<String>.of(entry.value),
   };
+
+  bool _loadedLocal = false;
+
+  Future<void> ensureLocalPostsLoaded(AppUser currentUser) async {
+    if (_loadedLocal) return;
+    _loadedLocal = true;
+    final local = await LocalPostStore.instance.load(currentUser: currentUser);
+    if (local.isEmpty) return;
+    _posts.insertAll(0, local);
+    notifyListeners();
+  }
 
   List<Post> get posts => List.unmodifiable(_posts);
   List<Story> get stories => List.unmodifiable(_stories);

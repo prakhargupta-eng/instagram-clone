@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart' as video;
 
 import '../../constants.dart';
+import '../../widgets/media_image.dart';
 
 class PostEditorScreen extends StatefulWidget {
   const PostEditorScreen({
@@ -127,8 +128,8 @@ class _PostEditorScreenState extends State<PostEditorScreen> {
                         borderRadius: BorderRadius.circular(3),
                         child: ColorFiltered(
                           colorFilter: filter.matrix,
-                          child: Image.network(
-                            widget.mediaUrl,
+                          child: MediaImage(
+                            path: widget.mediaUrl,
                             fit: BoxFit.cover,
                             errorBuilder: (_, _, _) => Container(
                               color: Colors.black26,
@@ -242,8 +243,8 @@ class _MediaPreviewState extends State<_MediaPreview> {
       }
       return video.VideoPlayer(c);
     }
-    return Image.network(
-      widget.url,
+    return MediaImage(
+      path: widget.url,
       fit: BoxFit.cover,
       errorBuilder: (_, _, _) => Container(
         color: Colors.black26,
