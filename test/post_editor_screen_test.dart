@@ -2,8 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:instagram_clone/src/screens/create/post_editor_screen.dart';
+import 'test_helper.dart';
 
 void main() {
+  setUp(() async {
+    await setupTestHive();
+  });
   testWidgets('PostEditorScreen shows filters and toggles crop', (tester) async {
     await tester.pumpWidget(
       const MaterialApp(

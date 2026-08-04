@@ -3,8 +3,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:instagram_clone/src/data/mock_data.dart';
 import 'package:instagram_clone/src/models/post.dart';
 import 'package:instagram_clone/src/services/feed_service.dart';
+import 'test_helper.dart';
 
 void main() {
+  setUp(() async {
+    await setupTestHive();
+  });
   test('addPost inserts at top of feed', () {
     final feed = FeedService();
     final before = feed.posts.length;

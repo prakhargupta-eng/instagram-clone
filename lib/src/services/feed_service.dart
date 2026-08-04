@@ -1,4 +1,6 @@
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import 'package:hive/hive.dart';
 
 import '../data/mock_data.dart';
 import '../models/post.dart';
@@ -13,16 +15,81 @@ class FeedService extends ChangeNotifier {
     for (final entry in MockDatabase.follows.entries)
       entry.key: List<String>.of(entry.value),
   };
+  final Map<String, AppUser> _usersById = {
+    for (final user in MockDatabase.users) user.id: user,
+  };
 
   bool _loadedLocal = false;
+  final Set<String> _bookmarkedPostIds = {};
+
+  bool isBookmarked(String postId) => _bookmarkedPostIds.contains(postId);
+
+  void toggleBookmark(String postId) {
+    if (_bookmarkedPostIds.contains(postId)) {
+      _bookmarkedPostIds.remove(postId);
+    } else {
+      _bookmarkedPostIds.add(postId);
+    }
+    notifyListeners();
+  }
+
+  AppUser? userById(String id) => _usersById[id];
+
+  void ensureUserRegistered(AppUser user) {
+    if (!_usersById.containsKey(user.id)) _usersById[user.id] = user;
+  }
 
   Future<void> ensureLocalPostsLoaded(AppUser currentUser) async {
     if (_loadedLocal) return;
     _loadedLocal = true;
-    final local = await LocalPostStore.instance.load(currentUser: currentUser);
-    if (local.isEmpty) return;
-    _posts.insertAll(0, local);
+    ensureUserRegistered(currentUser);
+
+    try {
+      // 1. Load follows table
+      final followsBox = await Hive.openBox('follows_box');
+      if (followsBox.isNotEmpty) {
+        _follows.clear();
+        for (final key in followsBox.keys) {
+          _follows[key as String] = List<String>.from(followsBox.get(key));
+        }
+      }
+
+      // 2. Load posts table
+      final box = await Hive.openBox('posts_box');
+      final raw = box.get('all_posts_key') as String?;
+      if (raw != null && raw.isNotEmpty) {
+        final list = jsonDecode(raw) as List;
+        _posts
+          ..clear()
+          ..addAll(
+            list.map((e) => Post.fromJson(e as Map<String, dynamic>)).toList(),
+          );
+      } else {
+        // Save initial mock database posts
+        final list = _posts.map((p) => p.toJson()).toList();
+        await box.put('all_posts_key', jsonEncode(list));
+      }
+    } catch (e) {
+      debugPrint('FeedService init error: $e');
+    }
     notifyListeners();
+  }
+
+  Future<void> _persistAllPosts() async {
+    try {
+      final box = await Hive.openBox('posts_box');
+      final list = _posts.map((p) => p.toJson()).toList();
+      await box.put('all_posts_key', jsonEncode(list));
+    } catch (_) {}
+  }
+
+  Future<void> _persistFollows() async {
+    try {
+      final box = await Hive.openBox('follows_box');
+      for (final entry in _follows.entries) {
+        await box.put(entry.key, entry.value);
+      }
+    } catch (_) {}
   }
 
   List<Post> get posts => List.unmodifiable(_posts);
@@ -38,12 +105,27 @@ class FeedService extends ChangeNotifier {
 
   void toggleFollow(String followerId, String followeeId) {
     final list = List<String>.from(followingIdsOf(followerId));
-    if (list.contains(followeeId)) {
+    final wasFollowing = list.contains(followeeId);
+    if (wasFollowing) {
       list.remove(followeeId);
     } else {
       list.insert(0, followeeId);
     }
     _follows[followerId] = list;
+
+    final follower = _usersById[followerId];
+    final followee = _usersById[followeeId];
+    if (follower != null) {
+      _usersById[followerId] = follower.copyWith(
+        following: (follower.following + (wasFollowing ? -1 : 1)).clamp(0, 999999),
+      );
+    }
+    if (followee != null) {
+      _usersById[followeeId] = followee.copyWith(
+        followers: (followee.followers + (wasFollowing ? -1 : 1)).clamp(0, 999999),
+      );
+    }
+    _persistFollows();
     notifyListeners();
   }
 
@@ -88,6 +170,7 @@ class FeedService extends ChangeNotifier {
       likedBy.insert(0, userId);
     }
     _posts[index] = post.copyWith(likedBy: likedBy);
+    _persistAllPosts();
     notifyListeners();
   }
 
@@ -105,16 +188,20 @@ class FeedService extends ChangeNotifier {
       ),
     );
     _posts[index] = post.copyWith(comments: comments);
+    _persistAllPosts();
     notifyListeners();
   }
 
   void addPost(Post post) {
     _posts.insert(0, post);
+    _persistAllPosts();
     notifyListeners();
   }
 
   void deletePost(String postId) {
     _posts.removeWhere((p) => p.id == postId);
+    LocalPostStore.instance.delete(postId);
+    _persistAllPosts();
     notifyListeners();
   }
 }

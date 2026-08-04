@@ -1,6 +1,9 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 
 import '../constants.dart';
+import '../services/local_post_store.dart';
 
 class Avatar extends StatelessWidget {
   final String? url;
@@ -57,13 +60,19 @@ class Avatar extends StatelessWidget {
   }
 
   Widget _image() {
-    return url != null
-        ? Image.network(
-            url!,
-            fit: BoxFit.cover,
-            errorBuilder: (_, _, _) => _fallback(),
-          )
-        : _fallback();
+    if (url == null || url!.isEmpty) return _fallback();
+    if (LocalPostStore.isLocalPath(url!)) {
+      return Image.file(
+        File(url!),
+        fit: BoxFit.cover,
+        errorBuilder: (_, _, _) => _fallback(),
+      );
+    }
+    return Image.network(
+      url!,
+      fit: BoxFit.cover,
+      errorBuilder: (_, _, _) => _fallback(),
+    );
   }
 
   Widget _fallback() {

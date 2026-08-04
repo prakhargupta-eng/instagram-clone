@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 
 import 'constants.dart';
 import 'services/auth_service.dart';
+import 'theme.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/home/home_shell.dart';
-import 'theme.dart';
+
+import 'routes/app_router.dart';
 
 class AppScope extends InheritedWidget {
   const AppScope({super.key, required this.authService, required super.child});
@@ -38,6 +40,9 @@ class _InstaCloneAppState extends State<InstaCloneApp> {
     _authService = AuthService();
     _authService.init().then((_) {
       if (mounted) setState(() => _ready = true);
+    }).catchError((e) {
+      debugPrint('Initialization error: $e');
+      if (mounted) setState(() => _ready = true);
     });
   }
 
@@ -58,22 +63,19 @@ class _InstaCloneAppState extends State<InstaCloneApp> {
                       : LoginScreen(authService: _authService);
                 },
               )
-            : const _SplashScreen(),
+            : const Scaffold(
+                backgroundColor: AppColors.surface,
+                body: Center(
+                  child: CircularProgressIndicator(color: AppColors.primary),
+                ),
+              ),
+        onGenerateRoute: (settings) => AppRouter.generate(
+          settings,
+          authService: _authService,
+          ready: _ready,
+        ),
       ),
     );
   }
 }
 
-class _SplashScreen extends StatelessWidget {
-  const _SplashScreen();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Scaffold(
-      backgroundColor: AppColors.surface,
-      body: Center(
-        child: CircularProgressIndicator(color: AppColors.primary),
-      ),
-    );
-  }
-}

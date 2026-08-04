@@ -1,7 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:hive/hive.dart';
 
 import '../constants.dart';
 import '../data/mock_data.dart';
@@ -30,6 +30,8 @@ class AuthService extends ChangeNotifier {
   AppUser? get currentUser => _currentUser;
   bool get isLoggedIn => _currentUser != null;
   bool _initialized = false;
+  String _sessionKey = '';
+  String get sessionKey => _sessionKey;
 
   List<AppUser> get registeredUsers => _registeredUsers;
 
@@ -39,54 +41,59 @@ class AuthService extends ChangeNotifier {
   Future<void> init() async {
     if (_initialized) return;
     _initialized = true;
-    final prefs = await SharedPreferences.getInstance();
-    final storedUsers = prefs.getString(_kRegisteredUsers);
-    if (storedUsers != null) {
-      try {
-        final list = (jsonDecode(storedUsers) as List)
-            .map((e) => AppUser.fromJson(e as Map<String, dynamic>))
-            .toList();
-        _registeredUsers
-          ..clear()
-          ..addAll(list);
-      } catch (_) {}
-    }
-    final storedPasswords = prefs.getString(_kPasswords);
-    if (storedPasswords != null) {
-      try {
-        final map = jsonDecode(storedPasswords) as Map<String, dynamic>;
-        _passwords
-          ..clear()
-          ..addAll(map.map((k, v) => MapEntry(k, v as String)));
-      } catch (_) {}
-    }
-    final storedSession = prefs.getString(_kSessionUser);
-    if (storedSession != null) {
-      try {
-        final data = jsonDecode(storedSession) as Map<String, dynamic>;
-        final id = data['id'] as String;
-        _currentUser = _registeredUsers.where((u) => u.id == id).firstOrNull ??
-            AppUser.fromJson(data);
-      } catch (_) {
-        _currentUser = null;
+    try {
+      final box = await Hive.openBox('auth_box');
+      final storedUsers = box.get(_kRegisteredUsers) as String?;
+      if (storedUsers != null) {
+        try {
+          final list = (jsonDecode(storedUsers) as List)
+              .map((e) => AppUser.fromJson(e as Map<String, dynamic>))
+              .toList();
+          _registeredUsers
+            ..clear()
+            ..addAll(list);
+        } catch (_) {}
       }
+      final storedPasswords = box.get(_kPasswords) as String?;
+      if (storedPasswords != null) {
+        try {
+          final map = jsonDecode(storedPasswords) as Map<String, dynamic>;
+          _passwords
+            ..clear()
+            ..addAll(map.map((k, v) => MapEntry(k, v as String)));
+        } catch (_) {}
+      }
+      final storedSession = box.get(_kSessionUser) as String?;
+      if (storedSession != null) {
+        try {
+          final data = jsonDecode(storedSession) as Map<String, dynamic>;
+          final id = data['id'] as String;
+          _currentUser = _registeredUsers.where((u) => u.id == id).firstOrNull ??
+              AppUser.fromJson(data);
+          _sessionKey = DateTime.now().millisecondsSinceEpoch.toString();
+        } catch (_) {
+          _currentUser = null;
+        }
+      }
+    } catch (e) {
+      debugPrint('AuthService init error: $e');
     }
     notifyListeners();
   }
 
   Future<void> _saveSession(AppUser user) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_kSessionUser, jsonEncode(user.toJson()));
-    await prefs.setString(
+    final box = await Hive.openBox('auth_box');
+    await box.put(_kSessionUser, jsonEncode(user.toJson()));
+    await box.put(
       _kRegisteredUsers,
       jsonEncode(_registeredUsers.map((u) => u.toJson()).toList()),
     );
-    await prefs.setString(_kPasswords, jsonEncode(_passwords));
+    await box.put(_kPasswords, jsonEncode(_passwords));
   }
 
   Future<void> _clearSession() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_kSessionUser);
+    final box = await Hive.openBox('auth_box');
+    await box.delete(_kSessionUser);
   }
 
   Future<AuthResult> login(String email, String password) async {
@@ -106,6 +113,7 @@ class AuthService extends ChangeNotifier {
       );
     }
     _currentUser = user;
+    _sessionKey = DateTime.now().millisecondsSinceEpoch.toString();
     await _saveSession(user);
     notifyListeners();
     return AuthResult(success: true, user: user);
@@ -149,6 +157,7 @@ class AuthService extends ChangeNotifier {
     _registeredUsers.add(user);
     _passwords[normalizedEmail] = password;
     _currentUser = user;
+    _sessionKey = DateTime.now().millisecondsSinceEpoch.toString();
     await _saveSession(user);
     notifyListeners();
     return AuthResult(success: true, user: user);
@@ -167,13 +176,13 @@ class AuthService extends ChangeNotifier {
     final email = _currentUser?.email;
     if (email != null) _passwords.remove(email);
     _currentUser = null;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_kSessionUser);
-    await prefs.setString(
+    final box = await Hive.openBox('auth_box');
+    await box.delete(_kSessionUser);
+    await box.put(
       _kRegisteredUsers,
       jsonEncode(_registeredUsers.map((u) => u.toJson()).toList()),
     );
-    await prefs.setString(_kPasswords, jsonEncode(_passwords));
+    await box.put(_kPasswords, jsonEncode(_passwords));
     notifyListeners();
   }
 

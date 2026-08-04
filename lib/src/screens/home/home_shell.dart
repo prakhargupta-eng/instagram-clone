@@ -84,13 +84,14 @@ class _HomeShellState extends State<HomeShell> {
                 ),
                 _NavItem(
                   icon: 'assets/icons/reels.png',
-                  selectedIcon: 'assets/icons/reels_selected.png',
+                  selectedIcon: 'assets/icons/reels.png',
                   isSelected: _selectedIndex == 3,
                   onTap: () => _onDestinationSelected(3),
                 ),
                 // Profile avatar as last nav item
                 GestureDetector(
                   onTap: () => _onDestinationSelected(4),
+                  behavior: HitTestBehavior.opaque,
                   child: Container(
                     width: 48,
                     alignment: Alignment.center,
@@ -153,6 +154,7 @@ class _NavItem extends StatelessWidget {
     final color = isSelected ? AppColors.textPrimary : AppColors.textSecondary;
     return GestureDetector(
       onTap: onTap,
+      behavior: HitTestBehavior.opaque,
       child: SizedBox(
         width: 48,
         height: 52,
@@ -163,6 +165,11 @@ class _NavItem extends StatelessWidget {
             height: 20,
             color: color,
             colorBlendMode: BlendMode.srcIn,
+            errorBuilder: (_, _, _) => Icon(
+              Icons.search_outlined,
+              color: color,
+              size: 20,
+            ),
           ),
         ),
       ),

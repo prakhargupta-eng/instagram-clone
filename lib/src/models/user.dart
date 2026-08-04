@@ -8,6 +8,8 @@ class AppUser {
   final int following;
   final int followers;
   final bool isPrivate;
+  final String website;
+  final String gender;
 
   const AppUser({
     required this.id,
@@ -19,6 +21,8 @@ class AppUser {
     this.following = 0,
     this.followers = 0,
     this.isPrivate = false,
+    this.website = '',
+    this.gender = '',
   });
 
   factory AppUser.fromJson(Map<String, dynamic> json) {
@@ -32,6 +36,8 @@ class AppUser {
       following: json['following'] ?? 0,
       followers: json['followers'] ?? 0,
       isPrivate: json['isPrivate'] ?? false,
+      website: json['website'] ?? '',
+      gender: json['gender'] ?? '',
     );
   }
 
@@ -45,6 +51,8 @@ class AppUser {
         'following': following,
         'followers': followers,
         'isPrivate': isPrivate,
+        'website': website,
+        'gender': gender,
       };
 
   AppUser copyWith({
@@ -55,6 +63,8 @@ class AppUser {
     int? following,
     int? followers,
     bool? isPrivate,
+    String? website,
+    String? gender,
   }) {
     return AppUser(
       id: id,
@@ -66,6 +76,8 @@ class AppUser {
       following: following ?? this.following,
       followers: followers ?? this.followers,
       isPrivate: isPrivate ?? this.isPrivate,
+      website: website ?? this.website,
+      gender: gender ?? this.gender,
     );
   }
 }

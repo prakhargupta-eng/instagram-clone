@@ -6,10 +6,12 @@ import '../../models/user.dart';
 import '../../services/auth_service.dart';
 import '../../services/feed_service.dart';
 import '../../widgets/avatar.dart';
+import '../../widgets/media_image.dart';
 import '../reels/reels_screen.dart';
 import 'edit_profile_screen.dart';
+import '../../routes/app_routes.dart';
 
-class ProfileScreen extends StatelessWidget {
+class ProfileScreen extends StatefulWidget {
   const ProfileScreen({
     super.key,
     required this.feedService,
@@ -21,18 +23,49 @@ class ProfileScreen extends StatelessWidget {
   final AppUser user;
   final AuthService? authService;
 
-  AppUser get _displayUser => authService?.currentUser ?? user;
-  bool get _isCurrentUser => authService != null;
+  @override
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen>
+    with SingleTickerProviderStateMixin {
+  late final TabController _tabController = TabController(length: 3, vsync: this);
+
+  FeedService get feedService => widget.feedService;
+
+  AppUser get _displayUser => widget.authService?.currentUser ?? widget.user;
+  bool get _isCurrentUser => widget.authService != null;
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final listenable = Listenable.merge([feedService, authService]);
+    final listenable = Listenable.merge([feedService, widget.authService]);
     return Scaffold(
       appBar: AppBar(
         title: AnimatedBuilder(
           animation: listenable,
-          builder: (context, _) =>
-              Text(_displayUser.username, style: const TextStyle(fontWeight: FontWeight.bold)),
+          builder: (context, _) {
+            final displayUser = _displayUser;
+            return Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (displayUser.isPrivate)
+                  const Padding(
+                    padding: EdgeInsets.only(right: 6),
+                    child: Icon(Icons.lock_outline, size: 16, color: AppColors.textPrimary),
+                  ),
+                Text(
+                  displayUser.username,
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ],
+            );
+          },
         ),
         centerTitle: false,
         actions: [
@@ -51,11 +84,12 @@ class ProfileScreen extends StatelessWidget {
         animation: listenable,
         builder: (context, _) {
           final displayUser = _displayUser;
+          final liveUser = feedService.userById(displayUser.id) ?? displayUser;
           final posts =
               feedService.posts.where((p) => p.author.id == displayUser.id).toList();
-          final isFollowing = authService == null
+          final isFollowing = widget.authService == null
               ? false
-              : feedService.isFollowing(authService!.currentUser!.id, displayUser.id);
+              : feedService.isFollowing(widget.authService!.currentUser!.id, displayUser.id);
           return ListView(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             children: [
@@ -70,8 +104,8 @@ class ProfileScreen extends StatelessWidget {
                       mainAxisAlignment: MainAxisAlignment.spaceAround,
                       children: [
                         _Stat(label: '${posts.length}', value: 'Posts'),
-                        _Stat(label: '${displayUser.followers}', value: 'Followers'),
-                        _Stat(label: '${displayUser.following}', value: 'Following'),
+                        _Stat(label: '${liveUser.followers}', value: 'Followers'),
+                        _Stat(label: '${liveUser.following}', value: 'Following'),
                       ],
                     ),
                   ),
@@ -82,40 +116,159 @@ class ProfileScreen extends StatelessWidget {
                 displayUser.fullName,
                 style: const TextStyle(fontWeight: FontWeight.w600),
               ),
-              if (displayUser.bio.isNotEmpty)
+              if (displayUser.bio.isNotEmpty) ...[
+                const SizedBox(height: 2),
                 Text(displayUser.bio, style: const TextStyle(color: AppColors.textSecondary)),
-              const SizedBox(height: 12),
-              SizedBox(
-                height: 34,
-                child: OutlinedButton(
-                  onPressed: _isCurrentUser
-                      ? () => _openEditProfile(context)
-                      : () => _toggleFollow(context),
+              ],
+              if (displayUser.website.isNotEmpty) ...[
+                const SizedBox(height: 4),
+                GestureDetector(
+                  onTap: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Opening: ${displayUser.website}')),
+                    );
+                  },
                   child: Text(
-                    _buttonLabel(isFollowing),
-                    style: const TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w600),
+                    displayUser.website,
+                    style: const TextStyle(
+                      color: Colors.blue,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
+                ),
+              ],
+              const SizedBox(height: 12),
+              if (_isCurrentUser)
+                Row(
+                  children: [
+                    Expanded(
+                      child: SizedBox(
+                        height: 32,
+                        child: OutlinedButton(
+                          onPressed: () => _openEditProfile(context),
+                          style: OutlinedButton.styleFrom(
+                            side: const BorderSide(color: AppColors.border, width: 0.8),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                            padding: EdgeInsets.zero,
+                          ),
+                          child: const Text(
+                            'Edit profile',
+                            style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w600, fontSize: 13),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: SizedBox(
+                        height: 32,
+                        child: OutlinedButton(
+                          onPressed: () {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Profile link copied')),
+                            );
+                          },
+                          style: OutlinedButton.styleFrom(
+                            side: const BorderSide(color: AppColors.border, width: 0.8),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                            padding: EdgeInsets.zero,
+                          ),
+                          child: const Text(
+                            'Share profile',
+                            style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w600, fontSize: 13),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                )
+              else
+                SizedBox(
+                  height: 32,
+                  child: OutlinedButton(
+                    onPressed: () => _toggleFollow(context),
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: AppColors.border, width: 0.8),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                    ),
+                    child: Text(
+                      _buttonLabel(isFollowing),
+                      style: const TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ),
+              const SizedBox(height: 12),
+              _buildTabBar(),
+              SizedBox(
+                height: 420,
+                child: TabBarView(
+                  controller: _tabController,
+                  children: [
+                    _buildPostsTab(posts),
+                    _buildReelsTab(posts),
+                    _buildTaggedTab(),
+                  ],
                 ),
               ),
-              const SizedBox(height: 8),
-              if (posts.isNotEmpty)
-                GridView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 3,
-                    mainAxisSpacing: 2,
-                    crossAxisSpacing: 2,
-                  ),
-                  itemCount: posts.length,
-                  itemBuilder: (context, index) =>
-                      _PostTile(feedService: feedService, post: posts[index]),
-                ),
             ],
           );
         },
       ),
     );
+  }
+
+  Widget _buildTabBar() {
+    return Container(
+      decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: AppColors.border, width: 0.5)),
+      ),
+      child: TabBar(
+        controller: _tabController,
+        indicatorColor: AppColors.textPrimary,
+        labelColor: AppColors.textPrimary,
+        unselectedLabelColor: AppColors.textSecondary,
+        tabs: const [
+          Tab(icon: Icon(Icons.grid_on_outlined, size: 22)),
+          Tab(icon: Icon(Icons.play_circle_outline, size: 22)),
+          Tab(icon: Icon(Icons.person_pin_outlined, size: 22)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPostsTab(List<Post> posts) {
+    if (posts.isEmpty) return const _EmptyTab(message: 'No posts yet');
+    return GridView.builder(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 3,
+        mainAxisSpacing: 2,
+        crossAxisSpacing: 2,
+      ),
+      itemCount: posts.length,
+      itemBuilder: (context, index) =>
+          _PostTile(feedService: feedService, post: posts[index]),
+    );
+  }
+
+  Widget _buildReelsTab(List<Post> posts) {
+    final reels = posts.where((p) => p.isVideo).toList();
+    if (reels.isEmpty) return const _EmptyTab(message: 'No reels yet');
+    return GridView.builder(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 3,
+        mainAxisSpacing: 2,
+        crossAxisSpacing: 2,
+      ),
+      itemCount: reels.length,
+      itemBuilder: (context, index) =>
+          _PostTile(feedService: feedService, post: reels[index]),
+    );
+  }
+
+  Widget _buildTaggedTab() {
+    return const _EmptyTab(message: 'No tagged posts yet');
   }
 
   String _buttonLabel(bool isFollowing) {
@@ -124,18 +277,19 @@ class ProfileScreen extends StatelessWidget {
   }
 
   void _openEditProfile(BuildContext context) {
+    final auth = widget.authService!;
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => EditProfileScreen(
-          authService: authService!,
-          user: authService!.currentUser!,
+          authService: auth,
+          user: auth.currentUser!,
         ),
       ),
     );
   }
 
   void _toggleFollow(BuildContext context) {
-    final current = authService?.currentUser;
+    final current = widget.authService?.currentUser;
     if (current == null) return;
     feedService.toggleFollow(current.id, _displayUser.id);
     ScaffoldMessenger.of(context).showSnackBar(
@@ -219,7 +373,7 @@ class ProfileScreen extends StatelessWidget {
       ),
     );
     if (confirmed == true) {
-      await authService?.logout();
+      await widget.authService?.logout();
     }
   }
 
@@ -243,7 +397,7 @@ class ProfileScreen extends StatelessWidget {
       ),
     );
     if (confirmed == true) {
-      await authService?.deleteAccount();
+      await widget.authService?.deleteAccount();
     }
   }
 }
@@ -266,6 +420,22 @@ class _Stat extends StatelessWidget {
   }
 }
 
+class _EmptyTab extends StatelessWidget {
+  const _EmptyTab({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Text(
+        message,
+        style: const TextStyle(color: AppColors.textSecondary),
+      ),
+    );
+  }
+}
+
 class _PostTile extends StatelessWidget {
   const _PostTile({required this.feedService, required this.post});
 
@@ -276,27 +446,39 @@ class _PostTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: () {
-        if (!post.isVideo) return;
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            fullscreenDialog: true,
-            builder: (_) => ReelsScreen(
-              feedService: feedService,
-              currentUser: post.author,
-              initialIndex: 0,
+        if (post.isVideo) {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              fullscreenDialog: true,
+              builder: (_) => ReelsScreen(
+                feedService: feedService,
+                currentUser: post.author,
+                initialIndex: 0,
+              ),
             ),
-          ),
+          );
+          return;
+        }
+        Navigator.of(context).pushNamed(
+          AppRoutes.detail,
+          arguments: {
+            'post': post,
+            'feedService': feedService,
+          },
         );
       },
       child: Stack(
         fit: StackFit.expand,
         children: [
-          Image.network(
-            post.imageUrl,
-            fit: BoxFit.cover,
-            errorBuilder: (_, _, _) => Container(
-              color: AppColors.border,
-              child: const Icon(Icons.image_not_supported_outlined, color: AppColors.textSecondary),
+          Hero(
+            tag: 'post_image_${post.id}',
+            child: MediaImage(
+              path: post.imageUrl,
+              fit: BoxFit.cover,
+              errorBuilder: (_, _, _) => Container(
+                color: AppColors.border,
+                child: const Icon(Icons.image_not_supported_outlined, color: AppColors.textSecondary),
+              ),
             ),
           ),
           if (post.isVideo)
@@ -312,3 +494,5 @@ class _PostTile extends StatelessWidget {
     );
   }
 }
+
+

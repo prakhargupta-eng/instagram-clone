@@ -10,6 +10,7 @@ import '../../widgets/story_bar.dart';
 import '../create/create_post_screen.dart';
 import '../reels/reels_screen.dart';
 import 'comments_sheet.dart';
+import '../chat/chat_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key, required this.authService, required this.feedService});
@@ -45,7 +46,6 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
         actions: [
-         
           IconButton(
             icon: Image.asset(
               'lib/src/asserts/massageIcon.png',
@@ -55,7 +55,11 @@ class _HomeScreenState extends State<HomeScreen> {
               colorBlendMode: BlendMode.srcIn,
               errorBuilder: (_, _, _) => const Icon(Icons.send_outlined, color: AppColors.textPrimary, size: 27),
             ),
-            onPressed: () {},
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const ChatScreen()),
+              );
+            },
           ),
         ],
         bottom: PreferredSize(
@@ -66,15 +70,16 @@ class _HomeScreenState extends State<HomeScreen> {
       body: AnimatedBuilder(
         animation: widget.feedService,
         builder: (context, _) {
-          return _buildFeed(widget.feedService.forYouFeed(_currentUser));
+          return _buildFeed(widget.feedService.forYouFeed(_currentUser), 'foryou');
         },
       ),
     );
   }
 
-  Widget _buildFeed(List<Post> feed) {
+  Widget _buildFeed(List<Post> feed, String keySuffix) {
+    final sessionKey = widget.authService.sessionKey;
     return ListView.builder(
-      key: const PageStorageKey('feed'),
+      key: PageStorageKey('feed_${_currentUser.id}_${sessionKey}_$keySuffix'),
       padding: EdgeInsets.zero,
       itemCount: feed.length + 1,
       itemBuilder: (context, index) {
@@ -92,6 +97,7 @@ class _HomeScreenState extends State<HomeScreen> {
             PostCard(
               post: post,
               currentUserId: _currentUser.id,
+              author: widget.feedService.userById(post.author.id) ?? post.author,
               onLike: () => widget.feedService.toggleLike(post.id, _currentUser.id),
               onComment: () => showCommentsSheet(
                 context,
@@ -99,6 +105,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 post: post,
                 currentUser: _currentUser,
               ),
+              isBookmarked: widget.feedService.isBookmarked(post.id),
+              onBookmark: () => widget.feedService.toggleBookmark(post.id),
               onTapMedia: post.isVideo
                   ? () => _openReels(post.id)
                   : null,
