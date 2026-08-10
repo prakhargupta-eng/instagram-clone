@@ -1,9 +1,13 @@
+import 'dart:io';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:video_player/video_player.dart' as video;
 
 import '../constants.dart';
 import '../models/post.dart';
 import '../models/user.dart';
+import '../services/local_post_store.dart';
 import 'avatar.dart';
 import 'media_image.dart';
 
@@ -15,9 +19,12 @@ class PostCard extends StatefulWidget {
     required this.onLike,
     required this.onComment,
     this.onTapMedia,
-    this.isBookmarked = false,
+    required this.isBookmarked,
     this.onBookmark,
     required this.author,
+    this.isMuted = false,
+    this.isActive = false,
+    this.onMuteToggle,
   });
 
   final Post post;
@@ -28,6 +35,9 @@ class PostCard extends StatefulWidget {
   final bool isBookmarked;
   final VoidCallback? onBookmark;
   final AppUser author;
+  final bool isMuted;
+  final bool isActive;
+  final VoidCallback? onMuteToggle;
 
   @override
   State<PostCard> createState() => _PostCardState();
@@ -37,6 +47,9 @@ class _PostCardState extends State<PostCard> with SingleTickerProviderStateMixin
   late final AnimationController _heartAnimController;
   late final Animation<double> _heartScale;
   bool _showHeartOverlay = false;
+
+  video.VideoPlayerController? _videoController;
+  bool _videoInitialized = false;
 
   @override
   void initState() {
@@ -62,11 +75,62 @@ class _PostCardState extends State<PostCard> with SingleTickerProviderStateMixin
         weight: 30,
       ),
     ]).animate(_heartAnimController);
+
+    if (widget.post.isVideo) {
+      _initVideo();
+    }
+  }
+
+  void _initVideo() {
+    final path = widget.post.videoUrl;
+    _videoController = LocalPostStore.isLocalPath(path)
+        ? video.VideoPlayerController.file(File(path))
+        : video.VideoPlayerController.networkUrl(Uri.parse(path));
+
+    _videoController!.initialize().then((_) {
+      if (!mounted) return;
+      _videoController!.setLooping(true);
+      _videoController!.setVolume(widget.isMuted ? 0.0 : 1.0);
+      setState(() {
+        _videoInitialized = true;
+      });
+      if (widget.isActive) {
+        _videoController!.play();
+      }
+    }).catchError((e) {
+      debugPrint('PostCard video init error: $e');
+    });
+  }
+
+  @override
+  void didUpdateWidget(PostCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.post.isVideo) {
+      if (_videoController == null) {
+        _initVideo();
+      } else {
+        if (widget.isMuted != oldWidget.isMuted) {
+          _videoController!.setVolume(widget.isMuted ? 0.0 : 1.0);
+        }
+        if (widget.isActive && !oldWidget.isActive) {
+          _videoController!.play();
+        } else if (!widget.isActive && oldWidget.isActive) {
+          _videoController!.pause();
+        }
+      }
+    } else {
+      if (_videoController != null) {
+        _videoController!.dispose();
+        _videoController = null;
+        _videoInitialized = false;
+      }
+    }
   }
 
   @override
   void dispose() {
     _heartAnimController.dispose();
+    _videoController?.dispose();
     super.dispose();
   }
 
@@ -137,10 +201,12 @@ class _PostCardState extends State<PostCard> with SingleTickerProviderStateMixin
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(Icons.music_note, size: 12, color: AppColors.textSecondary),
-                        const SizedBox(width: 2),
+                        MusicVisualizer(isPlaying: !widget.isMuted),
+                        const SizedBox(width: 4),
                         Text(
-                          widget.post.music!,
+                          widget.post.music!.contains('|\$\$\$|')
+                              ? widget.post.music!.split('|\$\$\$|')[0]
+                              : widget.post.music!,
                           style: const TextStyle(
                             fontSize: 11,
                             color: AppColors.textSecondary,
@@ -162,35 +228,76 @@ class _PostCardState extends State<PostCard> with SingleTickerProviderStateMixin
   }
 
   Widget _media(BuildContext context) {
+    final showVolumeIcon = widget.post.isVideo || (widget.post.music != null && widget.post.music!.isNotEmpty);
+
     return GestureDetector(
       onDoubleTap: _triggerDoubleTapLike,
-      onTap: widget.onTapMedia,
+      onTap: () {
+        if (widget.post.isVideo) {
+          if (widget.onMuteToggle != null) {
+            widget.onMuteToggle!();
+          }
+        } else {
+          if (widget.onTapMedia != null) {
+            widget.onTapMedia!();
+          }
+        }
+      },
       child: Stack(
         alignment: Alignment.center,
         children: [
           AspectRatio(
             aspectRatio: 1,
-            child: MediaImage(
-              path: widget.post.imageUrl,
-              fit: BoxFit.cover,
-              errorBuilder: (_, _, _) => Container(
-                color: AppColors.border,
-                child: const Icon(
-                  Icons.broken_image_outlined,
-                  color: AppColors.textSecondary,
-                  size: 40,
-                ),
+            child: widget.post.isVideo && _videoInitialized && _videoController != null
+                ? ClipRect(
+                    child: FittedBox(
+                      fit: BoxFit.cover,
+                      clipBehavior: Clip.hardEdge,
+                      child: SizedBox(
+                        width: _videoController!.value.size.width,
+                        height: _videoController!.value.size.height,
+                        child: video.VideoPlayer(_videoController!),
+                      ),
+                    ),
+                  )
+                : MediaImage(
+                    path: widget.post.imageUrl,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, _, _) => Container(
+                      color: AppColors.border,
+                      child: const Icon(
+                        Icons.broken_image_outlined,
+                        color: AppColors.textSecondary,
+                        size: 40,
+                      ),
+                    ),
+                  ),
+          ),
+          if (widget.post.isVideo && !_videoInitialized)
+            const Positioned.fill(
+              child: Center(
+                child: CircularProgressIndicator(color: Colors.white),
               ),
             ),
-          ),
-          if (widget.post.isVideo)
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: const BoxDecoration(
-                color: Colors.black38,
-                shape: BoxShape.circle,
+          if (showVolumeIcon)
+            Positioned(
+              bottom: 12,
+              right: 12,
+              child: GestureDetector(
+                onTap: widget.onMuteToggle,
+                child: Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: const BoxDecoration(
+                    color: Colors.black54,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    widget.isMuted ? Icons.volume_off : Icons.volume_up,
+                    color: Colors.white,
+                    size: 16,
+                  ),
+                ),
               ),
-              child: const Icon(Icons.play_arrow, color: AppColors.white, size: 34),
             ),
           if (_showHeartOverlay)
             ScaleTransition(
@@ -396,5 +503,95 @@ class _PostCardState extends State<PostCard> with SingleTickerProviderStateMixin
     if (diff.inHours < 24) return '${diff.inHours} hours ago';
     if (diff.inDays < 7) return '${diff.inDays} days ago';
     return DateFormat('MMM d').format(time);
+  }
+}
+
+class MusicVisualizer extends StatefulWidget {
+  const MusicVisualizer({super.key, required this.isPlaying});
+  final bool isPlaying;
+
+  @override
+  State<MusicVisualizer> createState() => _MusicVisualizerState();
+}
+
+class _MusicVisualizerState extends State<MusicVisualizer> with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1000),
+    );
+    if (widget.isPlaying) {
+      _controller.repeat();
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant MusicVisualizer oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isPlaying != oldWidget.isPlaying) {
+      if (widget.isPlaying) {
+        _controller.repeat();
+      } else {
+        _controller.stop();
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!widget.isPlaying) {
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: List.generate(3, (index) => Container(
+          margin: const EdgeInsets.symmetric(horizontal: 0.8),
+          width: 1.8,
+          height: 4,
+          decoration: BoxDecoration(
+            color: AppColors.textSecondary,
+            borderRadius: BorderRadius.circular(0.5),
+          ),
+        )),
+      );
+    }
+
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        return SizedBox(
+          height: 10,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              _bar(0.3 + 0.7 * (0.5 + 0.5 * math.sin(_controller.value * 2 * math.pi + 0))),
+              _bar(0.3 + 0.7 * (0.5 + 0.5 * math.sin(_controller.value * 2 * math.pi + 2))),
+              _bar(0.3 + 0.7 * (0.5 + 0.5 * math.sin(_controller.value * 2 * math.pi + 4))),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _bar(double heightPercent) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 0.8),
+      width: 1.8,
+      height: 10 * heightPercent,
+      decoration: BoxDecoration(
+        color: AppColors.primary,
+        borderRadius: BorderRadius.circular(0.5),
+      ),
+    );
   }
 }

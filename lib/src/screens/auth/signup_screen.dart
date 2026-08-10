@@ -34,14 +34,22 @@ class _SignupScreenState extends State<SignupScreen> {
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
-    setState(() => _loading = true);
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
     final result = await widget.authService.signup(
-      email: _emailController.text,
-      username: _usernameController.text,
-      fullName: _fullNameController.text,
+      email: _emailController.text.trim(),
+      username: _usernameController.text.trim(),
+      fullName: _fullNameController.text.trim(),
       password: _passwordController.text,
     );
     if (!mounted) return;
+    if (result.success) {
+      FocusScope.of(context).unfocus();
+      Navigator.of(context).pop();
+      return;
+    }
     setState(() {
       _loading = false;
       _error = result.error;
@@ -50,88 +58,167 @@ class _SignupScreenState extends State<SignupScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.surface,
-      appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.close),
-          onPressed: () => Navigator.of(context).maybePop(),
+    return GestureDetector(
+      onTap: () => FocusScope.of(context).unfocus(),
+      child: Scaffold(
+        backgroundColor: AppColors.surface,
+        appBar: AppBar(
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back),
+            onPressed: () => Navigator.of(context).maybePop(),
+          ),
         ),
-      ),
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 32),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const InstaLogo(size: 56, withIcon: false),
-                  const SizedBox(height: 6),
-                  const Text(
-                    AppStrings.signupTagline,
-                    textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 15, color: AppColors.textSecondary),
-                  ),
-                  const SizedBox(height: 24),
-                  TextFormField(
-                    controller: _emailController,
-                    keyboardType: TextInputType.emailAddress,
-                    decoration: const InputDecoration(hintText: AppStrings.email),
-                    validator: (v) => (v == null || v.trim().isEmpty) ? AppStrings.emailRequired : null,
-                  ),
-                  const SizedBox(height: 10),
-                  TextFormField(
-                    controller: _fullNameController,
-                    decoration: const InputDecoration(hintText: AppStrings.fullName),
-                    validator: (v) => (v == null || v.trim().isEmpty) ? AppStrings.fullNameRequired : null,
-                  ),
-                  const SizedBox(height: 10),
-                  TextFormField(
-                    controller: _usernameController,
-                    decoration: const InputDecoration(hintText: AppStrings.username),
-                    validator: (v) => (v == null || v.trim().isEmpty) ? AppStrings.usernameRequired : null,
-                  ),
-                  const SizedBox(height: 10),
-                  TextFormField(
-                    controller: _passwordController,
-                    obscureText: _obscure,
-                    decoration: InputDecoration(
-                      hintText: AppStrings.password,
-                      suffixIcon: IconButton(
-                        icon: Icon(_obscure ? Icons.visibility_off_outlined : Icons.visibility_outlined, size: 20),
-                        onPressed: () => setState(() => _obscure = !_obscure),
+        body: SafeArea(
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 32),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const InstaLogo(size: 56, withIcon: false),
+                    const SizedBox(height: 6),
+                    const Text(
+                      AppStrings.signupTagline,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 15,
+                        color: AppColors.textSecondary,
                       ),
                     ),
-                    validator: (v) => (v == null || v.length < 6) ? AppStrings.passwordMinLength : null,
-                  ),
-                  if (_error != null) ...[
-                    const SizedBox(height: 12),
-                    Text(
-                      _error!,
-                      style: const TextStyle(color: AppColors.error, fontSize: 13),
+                    const SizedBox(height: 24),
+                    TextFormField(
+                      controller: _emailController,
+                      keyboardType: TextInputType.emailAddress,
+                      decoration: const InputDecoration(
+                        hintText: AppStrings.email,
+                      ),
+                      autovalidateMode: AutovalidateMode.onUserInteraction,
+                      onChanged: (_) {
+                        if (_error != null) setState(() => _error = null);
+                      },
+                      validator: (v) {
+                        if (v == null || v.trim().isEmpty)
+                          return AppStrings.emailRequired;
+                        final emailRegex = RegExp(
+                          r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$',
+                        );
+                        if (!emailRegex.hasMatch(v.trim()))
+                          return 'Enter a valid email address';
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 10),
+                    TextFormField(
+                      controller: _fullNameController,
+                      decoration: const InputDecoration(
+                        hintText: AppStrings.fullName,
+                      ),
+                      autovalidateMode: AutovalidateMode.onUserInteraction,
+                      onChanged: (_) {
+                        if (_error != null) setState(() => _error = null);
+                      },
+                      validator: (v) {
+                        if (v == null || v.trim().isEmpty)
+                          return AppStrings.fullNameRequired;
+                        if (v.trim().length < 2)
+                          return 'Name must be at least 2 characters';
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 10),
+                    TextFormField(
+                      controller: _usernameController,
+                      decoration: const InputDecoration(
+                        hintText: AppStrings.username,
+                      ),
+                      autovalidateMode: AutovalidateMode.onUserInteraction,
+                      onChanged: (_) {
+                        if (_error != null) setState(() => _error = null);
+                      },
+                      validator: (v) {
+                        if (v == null || v.trim().isEmpty)
+                          return AppStrings.usernameRequired;
+                        if (v.trim().length < 3)
+                          return 'Username must be at least 3 characters';
+                        final usernameRegex = RegExp(r'^[a-zA-Z0-9_\.]+$');
+                        if (!usernameRegex.hasMatch(v.trim())) {
+                          return 'Only letters, numbers, periods, and underscores are allowed';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 10),
+                    TextFormField(
+                      controller: _passwordController,
+                      obscureText: _obscure,
+                      decoration: InputDecoration(
+                        hintText: AppStrings.password,
+                        suffixIcon: IconButton(
+                          icon: Icon(
+                            _obscure
+                                ? Icons.visibility_off_outlined
+                                : Icons.visibility_outlined,
+                            size: 20,
+                          ),
+                          onPressed: () => setState(() => _obscure = !_obscure),
+                        ),
+                      ),
+                      autovalidateMode: AutovalidateMode.onUserInteraction,
+                      onChanged: (_) {
+                        if (_error != null) setState(() => _error = null);
+                      },
+                      validator: (v) {
+                        if (v == null || v.isEmpty)
+                          return 'Password is required';
+                        if (v.length < 6) return AppStrings.passwordMinLength;
+                        return null;
+                      },
+                    ),
+                    if (_error != null) ...[
+                      const SizedBox(height: 8),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        child: Text(
+                          _error!,
+                          style: const TextStyle(
+                            color: AppColors.error,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 18),
+                    SizedBox(
+                      height: 44,
+                      child: ElevatedButton(
+                        onPressed: _loading ? null : _submit,
+                        child: _loading
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: AppColors.surface,
+                                ),
+                              )
+                            : const Text(AppStrings.signUp),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    const Text(
+                      AppStrings.signupAgreement,
                       textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: AppColors.textSecondary,
+                      ),
                     ),
+                    const SizedBox(height: 24),
                   ],
-                  const SizedBox(height: 18),
-                  SizedBox(
-                    height: 44,
-                    child: ElevatedButton(
-                      onPressed: _loading ? null : _submit,
-                      child: _loading
-                          ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.surface))
-                          : const Text(AppStrings.signUp),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  const Text(
-                    AppStrings.signupAgreement,
-                    textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
-                  ),
-                  const SizedBox(height: 24),
-                ],
+                ),
               ),
             ),
           ),

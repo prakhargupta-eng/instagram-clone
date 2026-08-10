@@ -34,13 +34,6 @@ class _HomeShellState extends State<HomeShell> {
 
   @override
   Widget build(BuildContext context) {
-    final screens = [
-      HomeScreen(authService: widget.authService, feedService: _feedService),
-      SearchScreen(feedService: _feedService, authService: widget.authService),
-      ReelsScreen(feedService: _feedService, currentUser: _currentUser),
-      ProfileScreen(feedService: _feedService, user: _currentUser, authService: widget.authService),
-    ];
-
     // _selectedIndex: 0=home, 1=search, 3=reels, 4=profile
     // screens list:  [0=Home, 1=Search, 2=Reels, 3=Profile]
     final screenIndex = switch (_selectedIndex) {
@@ -50,6 +43,21 @@ class _HomeShellState extends State<HomeShell> {
       4 => 3, // Profile
       _ => 0,
     };
+
+    final screens = [
+      HomeScreen(
+        authService: widget.authService,
+        feedService: _feedService,
+        visible: screenIndex == 0,
+      ),
+      SearchScreen(feedService: _feedService, authService: widget.authService),
+      ReelsScreen(
+        feedService: _feedService,
+        currentUser: _currentUser,
+        visible: screenIndex == 2,
+      ),
+      ProfileScreen(feedService: _feedService, user: _currentUser, authService: widget.authService),
+    ];
     return Scaffold(
       body: IndexedStack(index: screenIndex, children: screens),
       bottomNavigationBar: Container(
@@ -121,12 +129,14 @@ class _HomeShellState extends State<HomeShell> {
 
   void _onDestinationSelected(int index) {
     if (index == 2) {
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => CreatePostScreen(
-            feedService: _feedService,
-            currentUser: _currentUser,
-          ),
+      showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        useSafeArea: true,
+        backgroundColor: AppColors.surface,
+        builder: (_) => CreatePostScreen(
+          feedService: _feedService,
+          currentUser: _currentUser,
         ),
       );
       return;

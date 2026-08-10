@@ -64,5 +64,5 @@ class LocalPostStore {
   }
 
   static bool isLocalPath(String path) =>
-      path.startsWith('/') || path.startsWith('file://');
+      !path.startsWith('http://') && !path.startsWith('https://');
 }

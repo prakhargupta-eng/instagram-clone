@@ -13,11 +13,13 @@ class CommentsSheet extends StatefulWidget {
     required this.feedService,
     required this.post,
     required this.currentUser,
+    this.isDark = false,
   });
 
   final FeedService feedService;
   final Post post;
   final AppUser currentUser;
+  final bool isDark;
 
   @override
   State<CommentsSheet> createState() => _CommentsSheetState();
@@ -35,26 +37,40 @@ class _CommentsSheetState extends State<CommentsSheet> {
   @override
   Widget build(BuildContext context) {
     final post = widget.feedService.getPost(widget.post.id);
-    return Padding(
+    final dividerColor = widget.isDark ? Colors.white12 : AppColors.border;
+    final textColor = widget.isDark ? Colors.white : AppColors.textPrimary;
+    final subTextColor = widget.isDark ? Colors.white54 : AppColors.textSecondary;
+    final sheetBgColor = widget.isDark ? const Color(0xFF1E1E1E) : Colors.white;
+    final inputBgColor = widget.isDark ? const Color(0xFF2E2E2E) : AppColors.background;
+
+    return Container(
+      color: sheetBgColor,
       padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           const SizedBox(height: 8),
-          Container(width: 36, height: 4, decoration: BoxDecoration(color: AppColors.border, borderRadius: BorderRadius.circular(2))),
-          const SizedBox(height: 8),
-          const Text(
-            AppStrings.comments,
-            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15, color: AppColors.textPrimary),
+          Container(
+            width: 36,
+            height: 4,
+            decoration: BoxDecoration(
+              color: widget.isDark ? Colors.white24 : AppColors.border,
+              borderRadius: BorderRadius.circular(2),
+            ),
           ),
-          const Divider(height: 16),
+          const SizedBox(height: 8),
+          Text(
+            AppStrings.comments,
+            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15, color: textColor),
+          ),
+          Divider(height: 16, color: dividerColor),
           Flexible(
             child: post.comments.isEmpty
-                ? const Padding(
-                    padding: EdgeInsets.all(32),
+                ? Padding(
+                    padding: const EdgeInsets.all(32),
                     child: Text(
                       AppStrings.noCommentsYet,
-                      style: TextStyle(color: AppColors.textSecondary),
+                      style: TextStyle(color: subTextColor),
                     ),
                   )
                 : ListView.builder(
@@ -70,33 +86,33 @@ class _CommentsSheetState extends State<CommentsSheet> {
                             Avatar(url: comment.author.avatarUrl, radius: 16),
                             const SizedBox(width: 10),
                             Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    comment.author.username,
-                                    style: const TextStyle(fontWeight: FontWeight.w600, color: AppColors.textPrimary, fontSize: 13),
-                                  ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    comment.text,
-                                    style: const TextStyle(color: AppColors.textPrimary, fontSize: 13),
-                                  ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    DateFormat('MMM d, h:mm a').format(comment.createdAt),
-                                    style: const TextStyle(color: AppColors.textSecondary, fontSize: 11),
-                                  ),
-                                ],
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      comment.author.username,
+                                      style: TextStyle(fontWeight: FontWeight.w600, color: textColor, fontSize: 13),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      comment.text,
+                                      style: TextStyle(color: textColor, fontSize: 13),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      DateFormat('MMM d, h:mm a').format(comment.createdAt),
+                                      style: TextStyle(color: subTextColor, fontSize: 11),
+                                    ),
+                                  ],
+                                ),
                               ),
-                            ),
                           ],
                         ),
                       );
                     },
                   ),
           ),
-          const Divider(height: 1),
+          Divider(height: 1, color: dividerColor),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
             child: Row(
@@ -106,12 +122,25 @@ class _CommentsSheetState extends State<CommentsSheet> {
                 Expanded(
                   child: TextField(
                     controller: _controller,
-                    decoration: const InputDecoration(
+                    style: TextStyle(color: textColor),
+                    decoration: InputDecoration(
                       hintText: AppStrings.addAComment,
+                      hintStyle: TextStyle(color: subTextColor),
                       filled: true,
-                      fillColor: AppColors.background,
-                      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(20))),
+                      fillColor: inputBgColor,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      border: OutlineInputBorder(
+                        borderRadius: const BorderRadius.all(Radius.circular(20)),
+                        borderSide: BorderSide(color: dividerColor),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: const BorderRadius.all(Radius.circular(20)),
+                        borderSide: BorderSide(color: dividerColor),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: const BorderRadius.all(Radius.circular(20)),
+                        borderSide: BorderSide(color: widget.isDark ? Colors.white38 : AppColors.primary),
+                      ),
                     ),
                     textInputAction: TextInputAction.send,
                     onSubmitted: _submit,
@@ -142,11 +171,12 @@ Future<void> showCommentsSheet(
   required FeedService feedService,
   required Post post,
   required AppUser currentUser,
+  bool isDark = false,
 }) {
   return showModalBottomSheet(
     context: context,
     isScrollControlled: true,
-    backgroundColor: Colors.white,
+    backgroundColor: isDark ? const Color(0xFF1E1E1E) : Colors.white,
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
     ),
@@ -154,6 +184,7 @@ Future<void> showCommentsSheet(
       feedService: feedService,
       post: post,
       currentUser: currentUser,
+      isDark: isDark,
     ),
   );
 }

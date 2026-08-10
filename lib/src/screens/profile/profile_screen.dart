@@ -6,10 +6,10 @@ import '../../models/user.dart';
 import '../../services/auth_service.dart';
 import '../../services/feed_service.dart';
 import '../../widgets/avatar.dart';
-import '../../widgets/media_image.dart';
-import '../reels/reels_screen.dart';
 import 'edit_profile_screen.dart';
-import '../../routes/app_routes.dart';
+import 'compontes/Stat.dart';
+import 'compontes/EmptyTab.dart';
+import 'compontes/postTitle.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({
@@ -103,9 +103,9 @@ class _ProfileScreenState extends State<ProfileScreen>
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceAround,
                       children: [
-                        _Stat(label: '${posts.length}', value: 'Posts'),
-                        _Stat(label: '${liveUser.followers}', value: 'Followers'),
-                        _Stat(label: '${liveUser.following}', value: 'Following'),
+                        Stat(label: '${posts.length}', value: 'Posts'),
+                        Stat(label: '${liveUser.followers}', value: 'Followers'),
+                        Stat(label: '${liveUser.following}', value: 'Following'),
                       ],
                     ),
                   ),
@@ -237,7 +237,7 @@ class _ProfileScreenState extends State<ProfileScreen>
   }
 
   Widget _buildPostsTab(List<Post> posts) {
-    if (posts.isEmpty) return const _EmptyTab(message: 'No posts yet');
+    if (posts.isEmpty) return const EmptyTab(message: 'No posts yet');
     return GridView.builder(
       padding: const EdgeInsets.symmetric(vertical: 4),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
@@ -247,13 +247,13 @@ class _ProfileScreenState extends State<ProfileScreen>
       ),
       itemCount: posts.length,
       itemBuilder: (context, index) =>
-          _PostTile(feedService: feedService, post: posts[index]),
+          PostTile(feedService: feedService, post: posts[index], posts: posts),
     );
   }
 
   Widget _buildReelsTab(List<Post> posts) {
     final reels = posts.where((p) => p.isVideo).toList();
-    if (reels.isEmpty) return const _EmptyTab(message: 'No reels yet');
+    if (reels.isEmpty) return const EmptyTab(message: 'No reels yet');
     return GridView.builder(
       padding: const EdgeInsets.symmetric(vertical: 4),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
@@ -263,12 +263,12 @@ class _ProfileScreenState extends State<ProfileScreen>
       ),
       itemCount: reels.length,
       itemBuilder: (context, index) =>
-          _PostTile(feedService: feedService, post: reels[index]),
+          PostTile(feedService: feedService, post: reels[index], posts: reels),
     );
   }
 
   Widget _buildTaggedTab() {
-    return const _EmptyTab(message: 'No tagged posts yet');
+    return const EmptyTab(message: 'No tagged posts yet');
   }
 
   String _buttonLabel(bool isFollowing) {
@@ -403,96 +403,5 @@ class _ProfileScreenState extends State<ProfileScreen>
 }
 
 
-class _Stat extends StatelessWidget {
-  const _Stat({required this.label, required this.value});
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Text(label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-        Text(value, style: const TextStyle(fontSize: 13, color: AppColors.textSecondary)),
-      ],
-    );
-  }
-}
-
-class _EmptyTab extends StatelessWidget {
-  const _EmptyTab({required this.message});
-
-  final String message;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Text(
-        message,
-        style: const TextStyle(color: AppColors.textSecondary),
-      ),
-    );
-  }
-}
-
-class _PostTile extends StatelessWidget {
-  const _PostTile({required this.feedService, required this.post});
-
-  final FeedService feedService;
-  final Post post;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () {
-        if (post.isVideo) {
-          Navigator.of(context).push(
-            MaterialPageRoute(
-              fullscreenDialog: true,
-              builder: (_) => ReelsScreen(
-                feedService: feedService,
-                currentUser: post.author,
-                initialIndex: 0,
-              ),
-            ),
-          );
-          return;
-        }
-        Navigator.of(context).pushNamed(
-          AppRoutes.detail,
-          arguments: {
-            'post': post,
-            'feedService': feedService,
-          },
-        );
-      },
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          Hero(
-            tag: 'post_image_${post.id}',
-            child: MediaImage(
-              path: post.imageUrl,
-              fit: BoxFit.cover,
-              errorBuilder: (_, _, _) => Container(
-                color: AppColors.border,
-                child: const Icon(Icons.image_not_supported_outlined, color: AppColors.textSecondary),
-              ),
-            ),
-          ),
-          if (post.isVideo)
-            const Align(
-              alignment: Alignment.topRight,
-              child: Padding(
-                padding: EdgeInsets.all(4),
-                child: Icon(Icons.play_circle, color: AppColors.white, size: 20),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-}
 
 

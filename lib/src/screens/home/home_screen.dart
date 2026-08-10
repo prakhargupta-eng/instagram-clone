@@ -1,10 +1,14 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:audioplayers/audioplayers.dart';
 
+import '../../app.dart';
 import '../../constants.dart';
 import '../../models/post.dart';
 import '../../models/user.dart';
 import '../../services/auth_service.dart';
 import '../../services/feed_service.dart';
+import '../../services/music_service.dart';
 import '../../widgets/post_card.dart';
 import '../../widgets/story_bar.dart';
 import '../create/create_post_screen.dart';
@@ -13,17 +17,195 @@ import 'comments_sheet.dart';
 import '../chat/chat_screen.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key, required this.authService, required this.feedService});
+  const HomeScreen({
+    super.key,
+    required this.authService,
+    required this.feedService,
+    this.visible = true,
+  });
 
   final AuthService authService;
   final FeedService feedService;
+  final bool visible;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with RouteAware {
   AppUser get _currentUser => widget.authService.currentUser!;
+  
+  late final ScrollController _scrollController;
+  final Map<String, GlobalKey> _cardKeys = {};
+  int _currentIndex = 0;
+  List<Post> _currentFeedList = [];
+
+  bool _isPlaying = false;
+  bool _isMuted = false;
+  bool _isRouteActive = true;
+
+  GlobalKey _getKeyForPost(String postId) {
+    return _cardKeys.putIfAbsent(postId, () => GlobalKey());
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController = ScrollController();
+    _scrollController.addListener(_onScroll);
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _onScroll();
+    });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    routeObserver.subscribe(this, ModalRoute.of(context)!);
+  }
+
+  @override
+  void didUpdateWidget(HomeScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!widget.visible && oldWidget.visible) {
+      if (_isPlaying) {
+        MusicService.instance.pausePostMusic();
+        setState(() {
+          _isPlaying = false;
+        });
+      }
+    } else if (widget.visible && !oldWidget.visible) {
+      _onScroll();
+    }
+  }
+
+  @override
+  void didPushNext() {
+    setState(() {
+      _isRouteActive = false;
+    });
+    if (_isPlaying) {
+      MusicService.instance.pausePostMusic();
+      setState(() {
+        _isPlaying = false;
+      });
+    }
+  }
+
+  @override
+  void didPopNext() {
+    setState(() {
+      _isRouteActive = true;
+    });
+    if (widget.visible) {
+      _onScroll();
+    }
+  }
+
+  @override
+  void dispose() {
+    routeObserver.unsubscribe(this);
+    _scrollController.removeListener(_onScroll);
+    _scrollController.dispose();
+    _stopAndDisposeAudio();
+    super.dispose();
+  }
+
+  void _onScroll() {
+    if (!mounted || _currentFeedList.isEmpty) return;
+    final screenCenterY = MediaQuery.of(context).size.height / 2;
+
+    String? closestPostId;
+    double closestDistance = double.infinity;
+
+    for (final entry in _cardKeys.entries) {
+      final key = entry.value;
+      final context = key.currentContext;
+      if (context == null) continue;
+
+      final box = context.findRenderObject() as RenderBox?;
+      if (box == null || !box.hasSize) continue;
+
+      final position = box.localToGlobal(Offset.zero);
+      final itemCenterY = position.dy + box.size.height / 2;
+
+      final distance = (itemCenterY - screenCenterY).abs();
+      if (distance < closestDistance) {
+        closestDistance = distance;
+        closestPostId = entry.key;
+      }
+    }
+
+    if (closestPostId != null) {
+      final maxDistance = MediaQuery.of(context).size.height / 3;
+      if (closestDistance > maxDistance) {
+        if (_isPlaying) {
+          MusicService.instance.pausePostMusic();
+          setState(() {
+            _isPlaying = false;
+          });
+        }
+      } else {
+        final index = _currentFeedList.indexWhere((p) => p.id == closestPostId);
+        if (index != -1) {
+          if (index != _currentIndex) {
+            setState(() {
+              _currentIndex = index;
+            });
+            _playMusicForPost(_currentFeedList[index]);
+          } else {
+            if (MusicService.instance.player.state != PlayerState.playing && !MusicService.instance.userPaused) {
+              MusicService.instance.resumePostMusic();
+              setState(() {
+                _isPlaying = true;
+              });
+            }
+          }
+        }
+      }
+    }
+  }
+
+  void _playMusicForPost(Post post) async {
+    if (post.isVideo) {
+      if (mounted) {
+        setState(() {
+          _isPlaying = false;
+        });
+      }
+      await MusicService.instance.stop();
+      return;
+    }
+
+    try {
+      await MusicService.instance.setMuted(_isMuted);
+      await MusicService.instance.playPostMusic(post.music);
+      if (mounted) {
+        setState(() {
+          _isPlaying = MusicService.instance.player.state == PlayerState.playing;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error playing song: $e');
+      if (mounted) {
+        setState(() {
+          _isPlaying = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _stopAndDisposeAudio() async {
+    await MusicService.instance.stop();
+  }
+
+  void _toggleMute() {
+    setState(() {
+      _isMuted = !_isMuted;
+    });
+    MusicService.instance.setMuted(_isMuted);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -77,74 +259,152 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildFeed(List<Post> feed, String keySuffix) {
+    _currentFeedList = feed;
     final sessionKey = widget.authService.sessionKey;
+    final pending = widget.feedService.pendingUploads;
+
     return ListView.builder(
+      controller: _scrollController,
       key: PageStorageKey('feed_${_currentUser.id}_${sessionKey}_$keySuffix'),
       padding: EdgeInsets.zero,
-      itemCount: feed.length + 1,
+      itemCount: feed.length + 1 + pending.length,
       itemBuilder: (context, index) {
         if (index == 0) {
           return StoryBar(
             stories: widget.feedService.storiesFor(_currentUser),
             currentUser: _currentUser,
-            onAddStory: _openCreatePost,
+            onAddStory: _openCreateStory,
           );
         }
-        final post = feed[index - 1];
-        return Column(
-          children: [
-            const Divider(height: 0.5, thickness: 0.5, color: AppColors.border),
-            PostCard(
-              post: post,
-              currentUserId: _currentUser.id,
-              author: widget.feedService.userById(post.author.id) ?? post.author,
-              onLike: () => widget.feedService.toggleLike(post.id, _currentUser.id),
-              onComment: () => showCommentsSheet(
-                context,
-                feedService: widget.feedService,
+
+        if (index <= pending.length) {
+          final upload = pending[index - 1];
+          return _buildPendingUploadItem(upload);
+        }
+
+        final post = feed[index - 1 - pending.length];
+        return Container(
+          key: _getKeyForPost(post.id),
+          child: Column(
+            children: [
+              const Divider(height: 0.5, thickness: 0.5, color: AppColors.border),
+              PostCard(
                 post: post,
-                currentUser: _currentUser,
+                currentUserId: _currentUser.id,
+                author: widget.feedService.userById(post.author.id) ?? post.author,
+                isMuted: _isMuted,
+                isActive: _currentIndex == (index - 1 - pending.length) && widget.visible && _isRouteActive,
+                onMuteToggle: _toggleMute,
+                onLike: () => widget.feedService.toggleLike(post.id, _currentUser.id),
+                onComment: () => showCommentsSheet(
+                  context,
+                  feedService: widget.feedService,
+                  post: post,
+                  currentUser: _currentUser,
+                ),
+                isBookmarked: widget.feedService.isBookmarked(post.id),
+                onBookmark: () => widget.feedService.toggleBookmark(post.id),
+                onTapMedia: () {
+                  if (post.music != null && post.music!.isNotEmpty) {
+                    _toggleMute();
+                  }
+                },
               ),
-              isBookmarked: widget.feedService.isBookmarked(post.id),
-              onBookmark: () => widget.feedService.toggleBookmark(post.id),
-              onTapMedia: post.isVideo
-                  ? () => _openReels(post.id)
-                  : null,
-            ),
-          ],
+            ],
+          ),
         );
       },
     );
   }
 
-  void _openReels(String postId) {
-    final reels = widget.feedService.posts.where((p) => p.isVideo).toList();
-    final index = reels.indexWhere((p) => p.id == postId);
-    if (index < 0) return;
+  Widget _buildPendingUploadItem(PendingUpload upload) {
+    return Container(
+      decoration: const BoxDecoration(
+        color: AppColors.surface,
+        border: Border(
+          bottom: BorderSide(color: AppColors.border, width: 0.5),
+        ),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              // 20x20 Preview Image
+              Container(
+                width: 20,
+                height: 20,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(3),
+                  border: Border.all(color: AppColors.border, width: 0.5),
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(3),
+                  child: Image.network(
+                    upload.imageUrl,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) {
+                      return Container(color: AppColors.border);
+                    },
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              // Text "Uploading..."
+              const Expanded(
+                child: Text(
+                  'Uploading...',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          // Progress Bar
+          ClipRRect(
+            borderRadius: BorderRadius.circular(2),
+            child: LinearProgressIndicator(
+              value: upload.progress,
+              backgroundColor: AppColors.border.withOpacity(0.5),
+              valueColor: const AlwaysStoppedAnimation<Color>(AppColors.primary),
+              minHeight: 3,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _openReels(String index) {
+    // Open reels screen
+    final posts = widget.feedService.posts.where((p) => p.isVideo).toList();
+    final idx = posts.indexWhere((p) => p.id == index);
     Navigator.of(context).push(
       MaterialPageRoute(
         fullscreenDialog: true,
         builder: (_) => ReelsScreen(
           feedService: widget.feedService,
           currentUser: _currentUser,
-          initialIndex: index,
+          initialIndex: idx != -1 ? idx : 0,
         ),
       ),
     );
   }
 
-  void _openCreatePost() {
+  void _openCreateStory() {
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => CreatePostScreen(
           feedService: widget.feedService,
           currentUser: _currentUser,
+          isStory: true,
         ),
       ),
     );
   }
-
-
 }
-
-

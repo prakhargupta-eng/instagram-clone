@@ -1,5 +1,5 @@
+import 'dart:io';
 import 'dart:typed_data';
-
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:photo_manager/photo_manager.dart';
@@ -7,6 +7,7 @@ import 'package:video_player/video_player.dart' as video;
 
 import '../../constants.dart';
 import '../../models/post.dart';
+import '../../models/story.dart';
 import '../../models/user.dart';
 import '../../services/feed_service.dart';
 import '../../services/local_post_store.dart';
@@ -29,16 +30,32 @@ class _MediaSelection {
 
 const _mockVideos = <(String, String)>[
   (
-    'https://flutter.github.io/assets-for-api-docs/assets/videos/bee.mp4',
+    'https://test-videos.co.uk/vids/sintel/mp4/h264/720/Sintel_720_10s_1MB.mp4',
     'https://picsum.photos/seed/vpick1/400/600',
   ),
   (
-    'https://flutter.github.io/assets-for-api-docs/assets/videos/butterfly.mp4',
+    'https://test-videos.co.uk/vids/sintel/mp4/h264/360/Sintel_360_10s_1MB.mp4',
     'https://picsum.photos/seed/vpick2/400/600',
   ),
   (
-    'https://flutter.github.io/assets-for-api-docs/assets/videos/bee.mp4',
+    'https://test-videos.co.uk/vids/jellyfish/mp4/h264/360/Jellyfish_360_10s_1MB.mp4',
     'https://picsum.photos/seed/vpick3/400/600',
+  ),
+  (
+    'https://test-videos.co.uk/vids/elephantsdream/mp4/h264/360/ElephantsDream_360_10s_1MB.mp4',
+    'https://picsum.photos/seed/vpick4/400/600',
+  ),
+  (
+    'https://test-videos.co.uk/vids/caminandes/mp4/h264/360/Caminandes_360_10s_1MB.mp4',
+    'https://picsum.photos/seed/vpick5/400/600',
+  ),
+  (
+    'https://www.w3schools.com/html/mov_bbb.mp4',
+    'https://picsum.photos/seed/vpick6/400/600',
+  ),
+  (
+    'https://media.w3.org/2010/05/sintel/trailer.mp4',
+    'https://picsum.photos/seed/vpick7/400/600',
   ),
 ];
 
@@ -47,10 +64,12 @@ class CreatePostScreen extends StatefulWidget {
     super.key,
     required this.feedService,
     required this.currentUser,
+    this.isStory = false,
   });
 
   final FeedService feedService;
   final AppUser currentUser;
+  final bool isStory;
 
   @override
   State<CreatePostScreen> createState() => _CreatePostScreenState();
@@ -123,10 +142,27 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
       ),
     );
     if (edited == null || !mounted) return;
+
+    String thumb = edited;
+    if (isVideo) {
+      (String, String)? match;
+      for (final item in _mockVideos) {
+        if (item.$1 == url) {
+          match = item;
+          break;
+        }
+      }
+      if (match != null) {
+        thumb = match.$2;
+      } else {
+        thumb = 'https://picsum.photos/seed/vid_${DateTime.now().millisecondsSinceEpoch}/600/600';
+      }
+    }
+
     setState(() {
       _selected = _MediaSelection(
         url: edited,
-        thumbnail: isVideo ? url : edited,
+        thumbnail: thumb,
         isVideo: isVideo,
       );
     });
@@ -140,6 +176,15 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
     );
     if (picked == null || !mounted) return;
     await _openEditor(url: picked.path, isVideo: false);
+  }
+
+  Future<void> _pickVideo(ImageSource source) async {
+    final picked = await _imagePicker.pickVideo(
+      source: source,
+      maxDuration: const Duration(seconds: 60),
+    );
+    if (picked == null || !mounted) return;
+    await _openEditor(url: picked.path, isVideo: true);
   }
 
   Future<void> _pickFromGalleryAsset(AssetEntity asset) async {
@@ -164,14 +209,28 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
   }
 
   void _share() {
-    setState(() => _sharing = true);
-    Future.delayed(const Duration(milliseconds: 400), () async {
-      if (!mounted) return;
-      final selection = _selected!;
+    final selection = _selected!;
+    final previewImage = selection.thumbnail;
+    if (widget.isStory) {
+      setState(() => _sharing = true);
+      Future.delayed(const Duration(milliseconds: 400), () async {
+        if (!mounted) return;
+        final story = Story(
+          id: 's${DateTime.now().millisecondsSinceEpoch}',
+          user: widget.currentUser,
+          imageUrl: selection.isVideo ? selection.url : selection.thumbnail,
+          isVideo: selection.isVideo,
+          createdAt: DateTime.now(),
+        );
+        widget.feedService.addStory(story);
+        if (!mounted) return;
+        Navigator.of(context).pop();
+      });
+    } else {
       final post = Post(
         id: 'p${DateTime.now().millisecondsSinceEpoch}',
         author: widget.currentUser,
-        imageUrl: selection.thumbnail,
+        imageUrl: previewImage,
         videoUrl: selection.isVideo ? selection.url : '',
         caption: _captionController.text.trim(),
         location: _location,
@@ -179,17 +238,17 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
         createdAt: DateTime.now(),
         isVideo: selection.isVideo,
       );
-      widget.feedService.addPost(post);
-      await LocalPostStore.instance.add(post);
-      if (!mounted) return;
       Navigator.of(context).pop();
-    });
+      widget.feedService.startPostUpload(post);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.surface,
+    return GestureDetector(
+      onTap: () => FocusScope.of(context).unfocus(),
+      child: Scaffold(
+        backgroundColor: AppColors.surface,
       appBar: AppBar(
         backgroundColor: AppColors.surface,
         foregroundColor: AppColors.textPrimary,
@@ -206,8 +265,11 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                 onPressed: () => Navigator.of(context).maybePop(),
               )
             : IconButton(
-                icon: const Icon(Icons.arrow_back_ios_new,
-                    color: AppColors.textPrimary, size: 20),
+                icon: const Icon(
+                  Icons.arrow_back_ios_new,
+                  color: AppColors.textPrimary,
+                  size: 20,
+                ),
                 onPressed: () => setState(() => _selected = null),
               ),
         actions: [
@@ -219,7 +281,9 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                       width: 18,
                       height: 18,
                       child: CircularProgressIndicator(
-                          strokeWidth: 2, color: AppColors.primary),
+                        strokeWidth: 2,
+                        color: AppColors.primary,
+                      ),
                     )
                   : const Text(
                       'Share',
@@ -238,6 +302,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
         ),
       ),
       body: _selected == null ? _buildPicker() : _buildCaption(),
+      ),
     );
   }
 
@@ -248,8 +313,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
         SliverToBoxAdapter(
           child: Container(
             color: AppColors.surface,
-            padding:
-                const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -264,24 +328,39 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                       ),
                     ),
                     const SizedBox(width: 4),
-                    const Icon(Icons.expand_more,
-                        size: 20, color: AppColors.textPrimary),
+                    const Icon(
+                      Icons.expand_more,
+                      size: 20,
+                      color: AppColors.textPrimary,
+                    ),
                   ],
                 ),
-                Row(
-                  children: [
-                    _HeaderChip(
-                      icon: Icons.select_all_outlined,
-                      label: 'Select multiple',
-                      onTap: () {},
+                Expanded(
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        const SizedBox(width: 12),
+                        _HeaderChip(
+                          icon: Icons.camera_alt_outlined,
+                          label: 'Camera',
+                          onTap: () => _pickImage(ImageSource.camera),
+                        ),
+                        const SizedBox(width: 8),
+                        _HeaderChip(
+                          icon: Icons.videocam_outlined,
+                          label: 'Record Video',
+                          onTap: () => _pickVideo(ImageSource.camera),
+                        ),
+                        const SizedBox(width: 8),
+                        _HeaderChip(
+                          icon: Icons.video_library_outlined,
+                          label: 'Upload Video',
+                          onTap: () => _pickVideo(ImageSource.gallery),
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: 8),
-                    _HeaderChip(
-                      icon: Icons.camera_alt_outlined,
-                      label: 'Camera',
-                      onTap: () => _pickImage(ImageSource.camera),
-                    ),
-                  ],
+                  ),
                 ),
               ],
             ),
@@ -294,48 +373,46 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
           sliver: _loadingGallery
               ? const SliverFillRemaining(
                   child: Center(
-                    child:
-                        CircularProgressIndicator(color: AppColors.primary),
+                    child: CircularProgressIndicator(color: AppColors.primary),
                   ),
                 )
               : _galleryError != null && _assets.isEmpty
-                  ? SliverFillRemaining(
-                      child: Center(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(Icons.photo_library_outlined,
-                                size: 48, color: AppColors.textSecondary),
-                            const SizedBox(height: 12),
-                            Text(
-                              _galleryError!,
-                              style: const TextStyle(
-                                color: AppColors.textSecondary,
-                                fontSize: 14,
-                              ),
-                            ),
-                          ],
+              ? SliverFillRemaining(
+                  child: Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.photo_library_outlined,
+                          size: 48,
+                          color: AppColors.textSecondary,
                         ),
-                      ),
-                    )
-                  : SliverGrid(
-                      delegate: SliverChildBuilderDelegate(
-                        (context, index) {
-                          final asset = _assets[index];
-                          return _GalleryThumbnail(
-                            asset: asset,
-                            onTap: () => _pickFromGalleryAsset(asset),
-                          );
-                        },
-                        childCount: _assets.length,
-                      ),
-                      gridDelegate:
-                          const SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 3,
-                        mainAxisSpacing: 1.5,
-                        crossAxisSpacing: 1.5,
-                      ),
+                        const SizedBox(height: 12),
+                        Text(
+                          _galleryError!,
+                          style: const TextStyle(
+                            color: AppColors.textSecondary,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
                     ),
+                  ),
+                )
+              : SliverGrid(
+                  delegate: SliverChildBuilderDelegate((context, index) {
+                    final asset = _assets[index];
+                    return _GalleryThumbnail(
+                      asset: asset,
+                      onTap: () => _pickFromGalleryAsset(asset),
+                    );
+                  }, childCount: _assets.length),
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 3,
+                    mainAxisSpacing: 1.5,
+                    crossAxisSpacing: 1.5,
+                  ),
+                ),
         ),
 
         // ── Videos section ─────────────────────────────────────────
@@ -362,8 +439,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                   children: [
                     for (final (videoUrl, thumbnail) in _mockVideos)
                       GestureDetector(
-                        onTap: () =>
-                            _openEditor(url: videoUrl, isVideo: true),
+                        onTap: () => _openEditor(url: videoUrl, isVideo: true),
                         child: Container(
                           width: 100,
                           height: 124,
@@ -382,19 +458,28 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                                   gradient: LinearGradient(
                                     begin: Alignment.topCenter,
                                     end: Alignment.bottomCenter,
-                                    colors: [Colors.transparent, Colors.black54],
+                                    colors: [
+                                      Colors.transparent,
+                                      Colors.black54,
+                                    ],
                                   ),
                                 ),
                               ),
                               const Center(
-                                child: Icon(Icons.play_circle_fill,
-                                    color: Colors.white, size: 34),
+                                child: Icon(
+                                  Icons.play_circle_fill,
+                                  color: Colors.white,
+                                  size: 34,
+                                ),
                               ),
                               const Positioned(
                                 bottom: 6,
                                 right: 6,
-                                child: Icon(Icons.videocam_outlined,
-                                    color: Colors.white, size: 16),
+                                child: Icon(
+                                  Icons.videocam_outlined,
+                                  color: Colors.white,
+                                  size: 16,
+                                ),
                               ),
                             ],
                           ),
@@ -449,18 +534,30 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                   width: 56,
                   height: 56,
                   child: selection.isVideo
-                      ? Container(
-                          color: AppColors.border,
-                          child: const Icon(Icons.play_circle_outline,
-                              color: AppColors.textSecondary),
+                      ? Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            Image.network(
+                              selection.thumbnail,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => Container(
+                                color: AppColors.border,
+                                child: const Icon(
+                                  Icons.play_circle_outline,
+                                  color: AppColors.textSecondary,
+                                ),
+                              ),
+                            ),
+                            const Center(
+                              child: Icon(
+                                Icons.play_circle_outline,
+                                color: Colors.white,
+                                size: 22,
+                              ),
+                            ),
+                          ],
                         )
-                      : MediaImage(
-                          path: selection.thumbnail,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, _, _) => Container(
-                            color: AppColors.border,
-                          ),
-                        ),
+                      : MediaImage(path: selection.thumbnail, fit: BoxFit.cover),
                 ),
               ),
             ],
@@ -481,7 +578,11 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
             icon: Icons.location_on,
             label: _location!,
             trailing: IconButton(
-              icon: const Icon(Icons.close, size: 18, color: AppColors.textSecondary),
+              icon: const Icon(
+                Icons.close,
+                size: 18,
+                color: AppColors.textSecondary,
+              ),
               onPressed: () => setState(() => _location = null),
             ),
             onTap: _pickLocation,
@@ -498,7 +599,11 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
             icon: Icons.music_note,
             label: _music!,
             trailing: IconButton(
-              icon: const Icon(Icons.close, size: 18, color: AppColors.textSecondary),
+              icon: const Icon(
+                Icons.close,
+                size: 18,
+                color: AppColors.textSecondary,
+              ),
               onPressed: () => setState(() => _music = null),
             ),
             onTap: _pickMusic,
@@ -530,17 +635,23 @@ class _VideoPreviewState extends State<_VideoPreview> {
   @override
   void initState() {
     super.initState();
-    _controller = video.VideoPlayerController.networkUrl(Uri.parse(widget.url))
-      ..initialize().then((_) {
-        if (!mounted) return;
-        _controller?.setLooping(true);
-        _controller?.setVolume(0);
-        _controller?.play();
-        setState(() {});
-      }).catchError((_) {
-        if (!mounted) return;
-        setState(() {});
-      });
+    final path = widget.url;
+    _controller =
+        LocalPostStore.isLocalPath(path)
+              ? video.VideoPlayerController.file(File(path))
+              : video.VideoPlayerController.networkUrl(Uri.parse(path))
+          ..initialize()
+              .then((_) {
+                if (!mounted) return;
+                _controller?.setLooping(true);
+                _controller?.setVolume(0);
+                _controller?.play();
+                setState(() {});
+              })
+              .catchError((_) {
+                if (!mounted) return;
+                setState(() {});
+              });
   }
 
   @override
@@ -728,12 +839,15 @@ class _CaptionOption extends StatelessWidget {
                 ),
               ),
             ),
-            trailing ?? const Icon(Icons.chevron_right,
-                size: 22, color: AppColors.textSecondary),
+            trailing ??
+                const Icon(
+                  Icons.chevron_right,
+                  size: 22,
+                  color: AppColors.textSecondary,
+                ),
           ],
         ),
       ),
     );
   }
 }
-

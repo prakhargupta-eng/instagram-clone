@@ -141,55 +141,58 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.surface,
-      appBar: AppBar(
-        title: const Text('Edit profile', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-        leading: IconButton(
-          icon: const Icon(Icons.close),
-          onPressed: () => Navigator.of(context).maybePop(),
-        ),
-        actions: [
-          TextButton(
-            onPressed: _saving ? null : _save,
-            child: Text(
-              _saving ? 'Saving...' : AppStrings.done,
-              style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w700, fontSize: 16),
-            ),
+    return GestureDetector(
+      onTap: () => FocusScope.of(context).unfocus(),
+      child: Scaffold(
+        backgroundColor: AppColors.surface,
+        appBar: AppBar(
+          title: const Text('Edit profile', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+          leading: IconButton(
+            icon: const Icon(Icons.close),
+            onPressed: () => Navigator.of(context).maybePop(),
           ),
-          const SizedBox(width: 8),
-        ],
-      ),
-      body: ListView(
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        children: [
-          const SizedBox(height: 16),
-          Center(
-            child: Column(
-              children: [
-                Avatar(url: _avatarUrl, radius: 42),
-                const SizedBox(height: 10),
-                GestureDetector(
-                  onTap: _pickAvatarFromGallery,
-                  child: const Text(
-                    'Edit picture or avatar',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.primary,
+          actions: [
+            TextButton(
+              onPressed: _saving ? null : _save,
+              child: Text(
+                _saving ? 'Saving...' : AppStrings.done,
+                style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w700, fontSize: 16),
+              ),
+            ),
+            const SizedBox(width: 8),
+          ],
+        ),
+        body: ListView(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          children: [
+            const SizedBox(height: 16),
+            Center(
+              child: Column(
+                children: [
+                  Avatar(url: _avatarUrl, radius: 42),
+                  const SizedBox(height: 10),
+                  GestureDetector(
+                    onTap: _pickAvatarFromGallery,
+                    child: const Text(
+                      'Edit picture or avatar',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.primary,
+                      ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-          const SizedBox(height: 24),
-          _rowField(label: 'Name', controller: _fullNameController),
-          _rowField(label: 'Username', controller: _usernameController),
-          _rowField(label: 'Website', controller: _websiteController, hintText: 'Add link'),
-          _rowField(label: 'Bio', controller: _bioController, maxLines: 3),
-          _buildPrivateSection(),
-        ],
+            const SizedBox(height: 24),
+            _rowField(label: 'Name', controller: _fullNameController),
+            _rowField(label: 'Username', controller: _usernameController),
+            _rowField(label: 'Website', controller: _websiteController, hintText: 'Add link'),
+            _rowField(label: 'Bio', controller: _bioController, maxLines: 3),
+            _buildPrivateSection(),
+          ],
+        ),
       ),
     );
   }

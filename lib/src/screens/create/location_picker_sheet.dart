@@ -35,7 +35,9 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
   Widget build(BuildContext context) {
     final suggestions = _text.isEmpty
         ? _suggestions
-        : _suggestions.where((s) => s.toLowerCase().contains(_text.toLowerCase())).toList();
+        : _suggestions
+              .where((s) => s.toLowerCase().contains(_text.toLowerCase()))
+              .toList();
 
     return Scaffold(
       backgroundColor: AppColors.surface,
@@ -89,8 +91,11 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                     for (final suggestion in suggestions)
                       ListTile(
                         dense: true,
-                        leading: const Icon(Icons.location_on_outlined,
-                            size: 20, color: AppColors.textSecondary),
+                        leading: const Icon(
+                          Icons.location_on_outlined,
+                          size: 20,
+                          color: AppColors.textSecondary,
+                        ),
                         title: Text(
                           suggestion,
                           style: const TextStyle(fontSize: 14),

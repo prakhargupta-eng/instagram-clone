@@ -38,12 +38,14 @@ class AppRouter {
       case AppRoutes.detail:
         final args = settings.arguments as Map<String, dynamic>;
         final post = args['post'] as Post;
+        final posts = args['posts'] as List<Post>?;
         final feedService = args['feedService'] as FeedService;
 
         return MaterialPageRoute(
           settings: settings,
           builder: (_) => DetailsScreen(
             post: post,
+            posts: posts,
             feedService: feedService,
           ),
         );

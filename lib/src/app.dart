@@ -23,6 +23,8 @@ class AppScope extends InheritedWidget {
   bool updateShouldNotify(AppScope oldWidget) => authService != oldWidget.authService;
 }
 
+final RouteObserver<ModalRoute<void>> routeObserver = RouteObserver<ModalRoute<void>>();
+
 class InstaCloneApp extends StatefulWidget {
   const InstaCloneApp({super.key});
 
@@ -54,6 +56,7 @@ class _InstaCloneAppState extends State<InstaCloneApp> {
         title: AppStrings.appTitle,
         debugShowCheckedModeBanner: false,
         theme: AppTheme.light(),
+        navigatorObservers: [routeObserver],
         home: _ready
             ? AnimatedBuilder(
                 animation: _authService,

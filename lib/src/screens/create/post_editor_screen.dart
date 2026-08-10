@@ -5,6 +5,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:video_player/video_player.dart' as video;
 
 import '../../constants.dart';
+import '../../services/local_post_store.dart';
 import '../../widgets/media_image.dart';
 
 class PostEditorScreen extends StatefulWidget {
@@ -23,10 +24,68 @@ class PostEditorScreen extends StatefulWidget {
 
 class _PostEditorScreenState extends State<PostEditorScreen> {
   int _filterIndex = 0;
-  bool _cropMode = false;
+  int _editorMode = 0; // 0 = Filter, 1 = Edit, 2 = Crop
   double? _aspect;
   Rect _normalizedCropRect = const Rect.fromLTRB(0.0, 0.0, 1.0, 1.0);
   bool _isProcessing = false;
+
+  double _brightness = 0.0;
+  double _contrast = 1.0;
+  double _saturation = 1.0;
+
+  String? _selectedAdjustment; // 'Brightness', 'Contrast', 'Saturation'
+  double _tempVal = 0.0;
+
+  List<double> _brightnessMatrix(double value) {
+    final translation = value * 255.0;
+    return [
+      1, 0, 0, 0, translation,
+      0, 1, 0, 0, translation,
+      0, 0, 1, 0, translation,
+      0, 0, 0, 1, 0,
+    ];
+  }
+
+  List<double> _contrastMatrix(double value) {
+    final scale = value;
+    final translate = 128.0 * (1.0 - scale);
+    return [
+      scale, 0, 0, 0, translate,
+      0, scale, 0, 0, translate,
+      0, 0, scale, 0, translate,
+      0, 0, 0, 1, 0,
+    ];
+  }
+
+  List<double> _saturationMatrix(double value) {
+    final invSat = 1.0 - value;
+    final r = 0.213 * invSat;
+    final g = 0.715 * invSat;
+    final b = 0.072 * invSat;
+    return [
+      r + value, g, b, 0, 0,
+      r, g + value, b, 0, 0,
+      r, g, b + value, 0, 0,
+      0, 0, 0, 1, 0,
+    ];
+  }
+
+  List<double> _multiplyMatrices(List<double> a, List<double> b) {
+    final out = List<double>.filled(20, 0.0);
+    for (int i = 0; i < 4; i++) {
+      for (int j = 0; j < 5; j++) {
+        double sum = 0.0;
+        for (int k = 0; k < 4; k++) {
+          sum += a[i * 5 + k] * b[k * 5 + j];
+        }
+        if (j == 4) {
+          sum += a[i * 5 + 4]; // add translation from 'a'
+        }
+        out[i * 5 + j] = sum;
+      }
+    }
+    return out;
+  }
 
   Future<String> _renderFinalImage() async {
     final bytes = await File(widget.mediaUrl).readAsBytes();
@@ -45,9 +104,19 @@ class _PostEditorScreenState extends State<PostEditorScreen> {
     final recorder = ui.PictureRecorder();
     final canvas = Canvas(recorder);
     
-    // Apply filter
-    final paint = Paint()
-      ..colorFilter = _filters[_filterIndex].matrix;
+    // Apply composed color filters using matrix multiplication
+    List<double> combined = List<double>.from(_filters[_filterIndex].rawMatrix);
+    if (_brightness != 0.0) {
+      combined = _multiplyMatrices(_brightnessMatrix(_brightness), combined);
+    }
+    if (_contrast != 1.0) {
+      combined = _multiplyMatrices(_contrastMatrix(_contrast), combined);
+    }
+    if (_saturation != 1.0) {
+      combined = _multiplyMatrices(_saturationMatrix(_saturation), combined);
+    }
+
+    final paint = Paint()..colorFilter = ColorFilter.matrix(combined);
 
     final destRect = Rect.fromLTWH(0, 0, srcRect.width, srcRect.height);
     canvas.drawImageRect(image, srcRect, destRect, paint);
@@ -126,10 +195,19 @@ class _PostEditorScreenState extends State<PostEditorScreen> {
                     Positioned.fill(
                       child: ColorFiltered(
                         colorFilter: _filters[_filterIndex].matrix,
-                        child: _MediaPreview(url: widget.mediaUrl, isVideo: widget.isVideo),
+                        child: ColorFiltered(
+                          colorFilter: ColorFilter.matrix(_brightnessMatrix(_brightness)),
+                          child: ColorFiltered(
+                            colorFilter: ColorFilter.matrix(_contrastMatrix(_contrast)),
+                            child: ColorFiltered(
+                              colorFilter: ColorFilter.matrix(_saturationMatrix(_saturation)),
+                              child: _MediaPreview(url: widget.mediaUrl, isVideo: widget.isVideo),
+                            ),
+                          ),
+                        ),
                       ),
                     ),
-                    if (_cropMode)
+                    if (_editorMode == 2)
                       Positioned.fill(
                         child: _CropBox(
                           aspect: _aspect,
@@ -142,7 +220,7 @@ class _PostEditorScreenState extends State<PostEditorScreen> {
                 ),
               ),
               _buildModeBar(),
-              _cropMode ? _buildCropPanel() : _buildFilterStrip(),
+              _buildPanel(),
             ],
           ),
           if (_isProcessing)
@@ -170,22 +248,225 @@ class _PostEditorScreenState extends State<PostEditorScreen> {
       ),
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
           _ModeButton(
             icon: Icons.tune,
             label: 'Filters',
-            selected: !_cropMode,
-            onTap: () => setState(() => _cropMode = false),
+            selected: _editorMode == 0,
+            onTap: () => setState(() {
+              _editorMode = 0;
+              _selectedAdjustment = null;
+            }),
           ),
-          const SizedBox(width: 32),
+          _ModeButton(
+            icon: Icons.photo_filter,
+            label: 'Edit',
+            selected: _editorMode == 1,
+            onTap: () => setState(() => _editorMode = 1),
+          ),
           _ModeButton(
             icon: Icons.crop,
             label: 'Crop',
-            selected: _cropMode,
-            onTap: () => setState(() => _cropMode = true),
+            selected: _editorMode == 2,
+            onTap: () => setState(() {
+              _editorMode = 2;
+              _selectedAdjustment = null;
+            }),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildPanel() {
+    switch (_editorMode) {
+      case 0:
+        return _buildFilterStrip();
+      case 1:
+        return _buildEditPanel();
+      case 2:
+        return _buildCropPanel();
+      default:
+        return const SizedBox.shrink();
+    }
+  }
+
+  Widget _buildEditPanel() {
+    if (_selectedAdjustment != null) {
+      double min = -0.5;
+      double max = 0.5;
+      if (_selectedAdjustment == 'Contrast') {
+        min = 0.5;
+        max = 1.5;
+      } else if (_selectedAdjustment == 'Saturation') {
+        min = 0.0;
+        max = 2.0;
+      }
+
+      return Container(
+        height: 104,
+        color: AppColors.surface,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  _selectedAdjustment!,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textPrimary,
+                    fontSize: 14,
+                  ),
+                ),
+                Text(
+                  _tempVal.toStringAsFixed(2),
+                  style: const TextStyle(
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                  ),
+                ),
+              ],
+            ),
+            Row(
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.close, color: AppColors.textPrimary),
+                  onPressed: () {
+                    setState(() {
+                      // Cancel: revert dynamic edit preview back to original saved value
+                      if (_selectedAdjustment == 'Brightness') {
+                        _brightness = _brightness;
+                      } else if (_selectedAdjustment == 'Contrast') {
+                        _contrast = _contrast;
+                      } else if (_selectedAdjustment == 'Saturation') {
+                        _saturation = _saturation;
+                      }
+                      _selectedAdjustment = null;
+                    });
+                  },
+                ),
+                Expanded(
+                  child: Slider(
+                    value: _tempVal,
+                    min: min,
+                    max: max,
+                    activeColor: AppColors.primary,
+                    inactiveColor: AppColors.border,
+                    onChanged: (val) {
+                      setState(() {
+                        _tempVal = val;
+                        if (_selectedAdjustment == 'Brightness') {
+                          _brightness = val;
+                        } else if (_selectedAdjustment == 'Contrast') {
+                          _contrast = val;
+                        } else if (_selectedAdjustment == 'Saturation') {
+                          _saturation = val;
+                        }
+                      });
+                    },
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.check, color: AppColors.primary),
+                  onPressed: () {
+                    setState(() {
+                      if (_selectedAdjustment == 'Brightness') {
+                        _brightness = _tempVal;
+                      } else if (_selectedAdjustment == 'Contrast') {
+                        _contrast = _tempVal;
+                      } else if (_selectedAdjustment == 'Saturation') {
+                        _saturation = _tempVal;
+                      }
+                      _selectedAdjustment = null;
+                    });
+                  },
+                ),
+              ],
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Container(
+      height: 104,
+      color: AppColors.surface,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        children: [
+          _editItem(
+            label: 'Brightness',
+            icon: Icons.brightness_6_outlined,
+            onTap: () {
+              setState(() {
+                _selectedAdjustment = 'Brightness';
+                _tempVal = _brightness;
+              });
+            },
+            isActive: _brightness != 0.0,
+          ),
+          _editItem(
+            label: 'Contrast',
+            icon: Icons.contrast_outlined,
+            onTap: () {
+              setState(() {
+                _selectedAdjustment = 'Contrast';
+                _tempVal = _contrast;
+              });
+            },
+            isActive: _contrast != 1.0,
+          ),
+          _editItem(
+            label: 'Saturation',
+            icon: Icons.opacity,
+            onTap: () {
+              setState(() {
+                _selectedAdjustment = 'Saturation';
+                _tempVal = _saturation;
+              });
+            },
+            isActive: _saturation != 1.0,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _editItem({
+    required String label,
+    required IconData icon,
+    required VoidCallback onTap,
+    required bool isActive,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: SizedBox(
+        width: 80,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              icon,
+              color: isActive ? AppColors.primary : AppColors.textPrimary,
+              size: 24,
+            ),
+            const SizedBox(height: 6),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
+                color: isActive ? AppColors.primary : AppColors.textPrimary,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -304,7 +585,10 @@ class _MediaPreviewState extends State<_MediaPreview> {
   void initState() {
     super.initState();
     if (widget.isVideo) {
-      _controller = video.VideoPlayerController.networkUrl(Uri.parse(widget.url))
+      final path = widget.url;
+      _controller = LocalPostStore.isLocalPath(path)
+          ? video.VideoPlayerController.file(File(path))
+          : video.VideoPlayerController.networkUrl(Uri.parse(path))
         ..initialize().then((_) {
           if (!mounted) return;
           _controller?.setLooping(true);
@@ -574,10 +858,11 @@ class _CropPainter extends CustomPainter {
 }
 
 class FilterPreset {
-  const FilterPreset(this.name, this.matrix);
+  const FilterPreset(this.name, this.matrix, this.rawMatrix);
 
   final String name;
   final ColorFilter matrix;
+  final List<double> rawMatrix;
 }
 
 final _filters = <FilterPreset>[
@@ -586,47 +871,87 @@ final _filters = <FilterPreset>[
     0, 1, 0, 0, 0,
     0, 0, 1, 0, 0,
     0, 0, 0, 1, 0,
-  ])),
+  ]), [
+    1, 0, 0, 0, 0,
+    0, 1, 0, 0, 0,
+    0, 0, 1, 0, 0,
+    0, 0, 0, 1, 0,
+  ]),
   const FilterPreset('Clarendon', ColorFilter.matrix([
     1.25, 0, 0, 0, -18,
     0, 1.25, 0, 0, -18,
     0, 0, 1.25, 0, -28,
     0, 0, 0, 1, 0,
-  ])),
+  ]), [
+    1.25, 0, 0, 0, -18,
+    0, 1.25, 0, 0, -18,
+    0, 0, 1.25, 0, -28,
+    0, 0, 0, 1, 0,
+  ]),
   const FilterPreset('Gingham', ColorFilter.matrix([
     0.86, 0.07, 0.07, 0, 0,
     0.07, 0.86, 0.07, 0, 0,
     0.07, 0.07, 0.86, 0, 0,
     0, 0, 0, 1, 0,
-  ])),
+  ]), [
+    0.86, 0.07, 0.07, 0, 0,
+    0.07, 0.86, 0.07, 0, 0,
+    0.07, 0.07, 0.86, 0, 0,
+    0, 0, 0, 1, 0,
+  ]),
   const FilterPreset('Moon', ColorFilter.matrix([
     0.21, 0.72, 0.07, 0, 40,
     0.21, 0.72, 0.07, 0, 40,
     0.21, 0.72, 0.07, 0, 40,
     0, 0, 0, 1, 0,
-  ])),
+  ]), [
+    0.21, 0.72, 0.07, 0, 40,
+    0.21, 0.72, 0.07, 0, 40,
+    0.21, 0.72, 0.07, 0, 40,
+    0, 0, 0, 1, 0,
+  ]),
   const FilterPreset('Lark', ColorFilter.matrix([
     1.1, 0, 0, 0, 15,
     0, 1.05, 0, 0, 15,
     0, 0, 1.0, 0, 20,
     0, 0, 0, 1, 0,
-  ])),
+  ]), [
+    1.1, 0, 0, 0, 15,
+    0, 1.05, 0, 0, 15,
+    0, 0, 1.0, 0, 20,
+    0, 0, 0, 1, 0,
+  ]),
   const FilterPreset('Reyes', ColorFilter.matrix([
     1.2, 0, 0, 0, 0,
     0, 1.05, 0, 0, 0,
     0, 0, 0.9, 0, 0,
     0, 0, 0, 1, 0,
-  ])),
+  ]), [
+    1.2, 0, 0, 0, 0,
+    0, 1.05, 0, 0, 0,
+    0, 0, 0.9, 0, 0,
+    0, 0, 0, 1, 0,
+  ]),
   const FilterPreset('Juno', ColorFilter.matrix([
     1.4, 0, 0, 0, -15,
     0, 1.2, 0, 0, -10,
     0, 0, 1.1, 0, -10,
     0, 0, 0, 1, 0,
-  ])),
+  ]), [
+    1.4, 0, 0, 0, -15,
+    0, 1.2, 0, 0, -10,
+    0, 0, 1.1, 0, -10,
+    0, 0, 0, 1, 0,
+  ]),
   const FilterPreset('Willow', ColorFilter.matrix([
     0.5, 0.5, 0, 0, 20,
     0.35, 0.65, 0, 0, 15,
     0.4, 0.4, 0.2, 0, 10,
     0, 0, 0, 1, 0,
-  ])),
+  ]), [
+    0.5, 0.5, 0, 0, 20,
+    0.35, 0.65, 0, 0, 15,
+    0.4, 0.4, 0.2, 0, 10,
+    0, 0, 0, 1, 0,
+  ]),
 ];

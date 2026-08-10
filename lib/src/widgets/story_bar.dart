@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../constants.dart';
 import '../models/story.dart';
 import '../models/user.dart';
+import '../screens/home/story_viewer_screen.dart';
 import 'avatar.dart';
 
 class StoryBar extends StatelessWidget {
@@ -19,12 +20,17 @@ class StoryBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final currentUserStories = stories
+        .where((s) => s.user.id == currentUser.id)
+        .toList();
+    final hasStory = currentUserStories.isNotEmpty;
+
     return Container(
       color: Colors.white,
       child: Column(
         children: [
           SizedBox(
-            height: 108,
+            height: 110,
             child: ListView(
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
@@ -34,24 +40,51 @@ class StoryBar extends StatelessWidget {
                   avatar: Avatar(
                     url: currentUser.avatarUrl,
                     radius: 32,
-                    showRing: false,
+                    showRing: hasStory,
+                    gradientRing: hasStory,
+                    ringWidth: 2.5,
                   ),
-                  isAdd: true,
-                  onTap: onAddStory ?? () {},
+                  isAdd: !hasStory,
+                  onTap: () {
+                    if (hasStory) {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => StoryViewerScreen(
+                            stories: stories,
+                            initialIndex: stories.indexOf(
+                              currentUserStories.first,
+                            ),
+                          ),
+                        ),
+                      );
+                    } else {
+                      if (onAddStory != null) onAddStory!();
+                    }
+                  },
                 ),
                 const SizedBox(width: 4),
                 for (final story in stories)
-                  _StoryAvatar(
-                    label: story.user.username,
-                    avatar: Avatar(
-                      url: story.user.avatarUrl,
-                      radius: 30,
-                      showRing: true,
-                      gradientRing: true,
-                      ringWidth: 2.5,
+                  if (story.user.id != currentUser.id)
+                    _StoryAvatar(
+                      label: story.user.username,
+                      avatar: Avatar(
+                        url: story.user.avatarUrl,
+                        radius: 30,
+                        showRing: true,
+                        gradientRing: true,
+                        ringWidth: 2.5,
+                      ),
+                      onTap: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => StoryViewerScreen(
+                              stories: stories,
+                              initialIndex: stories.indexOf(story),
+                            ),
+                          ),
+                        );
+                      },
                     ),
-                    onTap: () {},
-                  ),
               ],
             ),
           ),
@@ -102,7 +135,11 @@ class _StoryAvatar extends StatelessWidget {
                           BorderSide(color: Colors.white, width: 2),
                         ),
                       ),
-                      child: const Icon(Icons.add, size: 14, color: Colors.white),
+                      child: const Icon(
+                        Icons.add,
+                        size: 14,
+                        color: Colors.white,
+                      ),
                     ),
                   ),
               ],
@@ -115,7 +152,11 @@ class _StoryAvatar extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 11, color: Colors.black, fontWeight: FontWeight.w400),
+                style: const TextStyle(
+                  fontSize: 11,
+                  color: Colors.black,
+                  fontWeight: FontWeight.w400,
+                ),
               ),
             ),
           ],

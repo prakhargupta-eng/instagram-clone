@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:hive/hive.dart';
 
@@ -64,10 +65,47 @@ class FeedService extends ChangeNotifier {
           ..addAll(
             list.map((e) => Post.fromJson(e as Map<String, dynamic>)).toList(),
           );
+
+        // Merge or update default mock posts in the persisted list
+        bool changedAny = false;
+        for (final mockPost in MockDatabase.posts) {
+          final index = _posts.indexWhere((p) => p.id == mockPost.id);
+          if (index == -1) {
+            _posts.add(mockPost);
+            changedAny = true;
+          } else {
+            final existing = _posts[index];
+            if (existing.videoUrl != mockPost.videoUrl || existing.imageUrl != mockPost.imageUrl) {
+              _posts[index] = existing.copyWith(
+                videoUrl: mockPost.videoUrl,
+                imageUrl: mockPost.imageUrl,
+              );
+              changedAny = true;
+            }
+          }
+        }
+        if (changedAny) {
+          await _persistAllPosts();
+        }
       } else {
         // Save initial mock database posts
         final list = _posts.map((p) => p.toJson()).toList();
         await box.put('all_posts_key', jsonEncode(list));
+      }
+
+      // 3. Load stories
+      final storiesRaw = box.get('all_stories_key') as String?;
+      if (storiesRaw != null && storiesRaw.isNotEmpty) {
+        final list = jsonDecode(storiesRaw) as List;
+        _stories
+          ..clear()
+          ..addAll(
+            list.map((e) => Story.fromJson(e as Map<String, dynamic>)).toList(),
+          );
+      } else {
+        // Save initial mock stories
+        final list = _stories.map((s) => s.toJson()).toList();
+        await box.put('all_stories_key', jsonEncode(list));
       }
     } catch (e) {
       debugPrint('FeedService init error: $e');
@@ -142,20 +180,50 @@ class FeedService extends ChangeNotifier {
     final followed = followingIdsOf(user.id);
     final followedPosts = _posts.where((p) => followed.contains(p.author.id));
     final others = _posts.where((p) => !followed.contains(p.author.id));
+
+    final othersSorted = others.toList()
+      ..sort((a, b) {
+        final aLikes = a.likedBy.contains(user.id) ? a.likedBy.length - 1 : a.likedBy.length;
+        final bLikes = b.likedBy.contains(user.id) ? b.likedBy.length - 1 : b.likedBy.length;
+        return bLikes.compareTo(aLikes);
+      });
+
     final result = <Post>[
       ...followedPosts.toList()..sort((a, b) => b.createdAt.compareTo(a.createdAt)),
-      ...others.toList()..sort((a, b) => b.likes.compareTo(a.likes)),
+      ...othersSorted,
     ];
     return result;
   }
 
   List<Story> storiesFor(AppUser user) {
     final followed = followingIdsOf(user.id);
-    final result = _stories
-        .where((s) => followed.contains(s.user.id))
-        .toList()
-      ..sort((a, b) => b.user.followers.compareTo(a.user.followers));
-    return result;
+    final now = DateTime.now();
+
+    // Filter stories created within the last 24 hours
+    final activeStories = _stories.where((s) {
+      final diff = now.difference(s.createdAt);
+      return diff.inHours < 24;
+    }).toList();
+
+    // Gather eligible stories (current user, followed users, and dummy mock accounts)
+    final result = activeStories.where((s) {
+      return s.user.id == user.id ||
+          followed.contains(s.user.id) ||
+          // Include all system mock profiles so the bar is always nicely populated
+          true;
+    }).toList();
+
+    // Deduplicate by user ID so each user appears once in the story bubbles list
+    final seen = <String>{};
+    final uniqueResult = <Story>[];
+    for (final s in result) {
+      if (!seen.contains(s.user.id)) {
+        seen.add(s.user.id);
+        uniqueResult.add(s);
+      }
+    }
+
+    return uniqueResult;
   }
 
   void toggleLike(String postId, String userId) {
@@ -204,4 +272,74 @@ class FeedService extends ChangeNotifier {
     _persistAllPosts();
     notifyListeners();
   }
+
+  Future<void> _persistStories() async {
+    try {
+      final box = await Hive.openBox('posts_box');
+      final list = _stories.map((s) => s.toJson()).toList();
+      await box.put('all_stories_key', jsonEncode(list));
+    } catch (_) {}
+  }
+
+  void addStory(Story story) {
+    _stories.insert(0, story);
+    _persistStories();
+    notifyListeners();
+  }
+
+  final List<PendingUpload> _pendingUploads = [];
+  List<PendingUpload> get pendingUploads => List.unmodifiable(_pendingUploads);
+
+  void startPostUpload(Post post) {
+    final pending = PendingUpload(
+      id: post.id,
+      imageUrl: post.imageUrl,
+      videoUrl: post.videoUrl,
+      caption: post.caption,
+      location: post.location,
+      music: post.music,
+      author: post.author,
+      isVideo: post.isVideo,
+    );
+    _pendingUploads.add(pending);
+    notifyListeners();
+
+    Timer.periodic(const Duration(milliseconds: 150), (timer) {
+      if (pending.progress >= 1.0) {
+        timer.cancel();
+        _pendingUploads.removeWhere((p) => p.id == pending.id);
+        addPost(post);
+      } else {
+        pending.progress += 0.1;
+        if (pending.progress > 1.0) {
+          pending.progress = 1.0;
+        }
+        notifyListeners();
+      }
+    });
+  }
+}
+
+class PendingUpload {
+  final String id;
+  final String imageUrl;
+  final String? videoUrl;
+  final String caption;
+  final String? location;
+  final String? music;
+  final AppUser author;
+  final bool isVideo;
+  double progress;
+
+  PendingUpload({
+    required this.id,
+    required this.imageUrl,
+    this.videoUrl,
+    required this.caption,
+    this.location,
+    this.music,
+    required this.author,
+    required this.isVideo,
+    this.progress = 0.0,
+  });
 }
