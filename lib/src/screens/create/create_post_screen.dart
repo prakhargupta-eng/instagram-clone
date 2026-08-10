@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:typed_data';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:photo_manager/photo_manager.dart';
@@ -83,6 +84,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
   String? _galleryError;
   String? _location;
   String? _music;
+  String? _musicPreviewUrl;
   List<AssetEntity> _assets = const [];
   final ImagePicker _imagePicker = ImagePicker();
 
@@ -202,10 +204,19 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
   }
 
   Future<void> _pickMusic() async {
-    final result = await Navigator.of(context).push<String>(
+    final result = await Navigator.of(context).push<dynamic>(
       MaterialPageRoute(builder: (_) => const MusicPickerScreen()),
     );
-    if (result != null && mounted) setState(() => _music = result);
+    if (result != null && mounted) {
+      if (result is Map) {
+        setState(() {
+          _music = result['name'] as String?;
+          _musicPreviewUrl = result['previewUrl'] as String?;
+        });
+      } else if (result is String) {
+        setState(() => _music = result);
+      }
+    }
   }
 
   void _share() {
@@ -235,6 +246,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
         caption: _captionController.text.trim(),
         location: _location,
         music: _music,
+        musicPreviewUrl: _musicPreviewUrl,
         createdAt: DateTime.now(),
         isVideo: selection.isVideo,
       );
@@ -452,7 +464,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                           child: Stack(
                             fit: StackFit.expand,
                             children: [
-                              Image.network(thumbnail, fit: BoxFit.cover),
+                              CachedNetworkImage(imageUrl: thumbnail, fit: BoxFit.cover),
                               Container(
                                 decoration: const BoxDecoration(
                                   gradient: LinearGradient(
@@ -537,10 +549,10 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                       ? Stack(
                           fit: StackFit.expand,
                           children: [
-                            Image.network(
-                              selection.thumbnail,
+                            CachedNetworkImage(
+                              imageUrl: selection.thumbnail,
                               fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => Container(
+                              errorWidget: (_, __, ___) => Container(
                                 color: AppColors.border,
                                 child: const Icon(
                                   Icons.play_circle_outline,
@@ -604,7 +616,10 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                 size: 18,
                 color: AppColors.textSecondary,
               ),
-              onPressed: () => setState(() => _music = null),
+              onPressed: () => setState(() {
+                _music = null;
+                _musicPreviewUrl = null;
+              }),
             ),
             onTap: _pickMusic,
           ),
@@ -781,10 +796,10 @@ class _AvatarSmall extends StatelessWidget {
         width: 32,
         height: 32,
         child: url != null
-            ? Image.network(
-                url!,
+            ? CachedNetworkImage(
+                imageUrl: url!,
                 fit: BoxFit.cover,
-                errorBuilder: (_, _, _) => const _FallbackAvatar(),
+                errorWidget: (_, __, ___) => const _FallbackAvatar(),
               )
             : const _FallbackAvatar(),
       ),

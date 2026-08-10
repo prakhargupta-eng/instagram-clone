@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart' as video;
 import '../../constants.dart';
@@ -224,10 +225,10 @@ class _StoryItemViewState extends State<StoryItemView> with SingleTickerProvider
                       File(widget.story.imageUrl),
                       fit: BoxFit.cover,
                     )
-                  : Image.network(
-                      widget.story.imageUrl,
+                  : CachedNetworkImage(
+                      imageUrl: widget.story.imageUrl,
                       fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => Container(
+                      errorWidget: (_, __, ___) => Container(
                         color: Colors.grey[900],
                         child: const Icon(Icons.broken_image, color: Colors.white54, size: 50),
                       ),

@@ -69,6 +69,7 @@ class AppStrings {
 
   // Account
   static const String logout = 'Log out';
+  static const String changePassword = 'Change Password';
   static const String logoutTitle = 'Log out?';
   static const String logoutConfirm = 'You will need to log in again to access your account.';
   static const String deleteAccount = 'Delete account';

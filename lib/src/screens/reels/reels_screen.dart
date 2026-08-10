@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart' as video;
+import 'package:instagram_clone/src/compontes/ToastHelper.dart';
 
 import '../../app.dart';
 import '../../models/post.dart';
@@ -275,11 +276,6 @@ class _ReelItemState extends State<ReelItem>
         _buildVideo(),
 
         _buildGradientOverlay(),
-        _buildActions(),
-        _buildInfo(),
-        _buildPlayPauseCenter(),
-        _buildHeartOverlay(),
-        _buildProgressBar(),
         Positioned.fill(
           child: GestureDetector(
             onTap: _togglePlay,
@@ -287,6 +283,11 @@ class _ReelItemState extends State<ReelItem>
             behavior: HitTestBehavior.opaque,
           ),
         ),
+        _buildActions(),
+        _buildInfo(),
+        _buildPlayPauseCenter(),
+        _buildHeartOverlay(),
+        _buildProgressBar(),
       ],
     );
   }
@@ -367,12 +368,7 @@ class _ReelItemState extends State<ReelItem>
                 color: Colors.white,
                 label: '',
                 onTap: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Share menu coming soon!'),
-                      duration: Duration(seconds: 1),
-                    ),
-                  );
+                  ToastHelper.showToast(context, "Share menu coming soon!");
                 },
               ),
               const SizedBox(height: 16),

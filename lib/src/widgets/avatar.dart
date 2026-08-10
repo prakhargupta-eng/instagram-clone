@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
 import '../constants.dart';
@@ -68,10 +69,10 @@ class Avatar extends StatelessWidget {
         errorBuilder: (_, _, _) => _fallback(),
       );
     }
-    return Image.network(
-      url!,
+    return CachedNetworkImage(
+      imageUrl: url!,
       fit: BoxFit.cover,
-      errorBuilder: (_, _, _) => _fallback(),
+      errorWidget: (_, __, ___) => _fallback(),
     );
   }
 

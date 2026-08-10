@@ -1,24 +1,18 @@
-import 'dart:convert';
 import 'dart:async';
 import 'package:flutter/foundation.dart';
-import 'package:hive/hive.dart';
 
 import '../data/mock_data.dart';
 import '../models/post.dart';
 import '../models/story.dart';
 import '../models/user.dart';
 import 'local_post_store.dart';
+import 'sql_database_helper.dart';
 
 class FeedService extends ChangeNotifier {
-  final List<Post> _posts = List.of(MockDatabase.posts);
-  final List<Story> _stories = List.of(MockDatabase.stories);
-  final Map<String, List<String>> _follows = {
-    for (final entry in MockDatabase.follows.entries)
-      entry.key: List<String>.of(entry.value),
-  };
-  final Map<String, AppUser> _usersById = {
-    for (final user in MockDatabase.users) user.id: user,
-  };
+  final List<Post> _posts = [];
+  final List<Story> _stories = [];
+  final Map<String, List<String>> _follows = {};
+  final Map<String, AppUser> _usersById = {};
 
   bool _loadedLocal = false;
   final Set<String> _bookmarkedPostIds = {};
@@ -37,7 +31,10 @@ class FeedService extends ChangeNotifier {
   AppUser? userById(String id) => _usersById[id];
 
   void ensureUserRegistered(AppUser user) {
-    if (!_usersById.containsKey(user.id)) _usersById[user.id] = user;
+    if (!_usersById.containsKey(user.id)) {
+      _usersById[user.id] = user;
+      SqlDatabaseHelper.instance.insertUser(user);
+    }
   }
 
   Future<void> ensureLocalPostsLoaded(AppUser currentUser) async {
@@ -46,88 +43,53 @@ class FeedService extends ChangeNotifier {
     ensureUserRegistered(currentUser);
 
     try {
-      // 1. Load follows table
-      final followsBox = await Hive.openBox('follows_box');
-      if (followsBox.isNotEmpty) {
-        _follows.clear();
-        for (final key in followsBox.keys) {
-          _follows[key as String] = List<String>.from(followsBox.get(key));
+      final db = SqlDatabaseHelper.instance;
+
+      // Seed posts if empty
+      final existingPosts = await db.getAllPosts();
+      if (existingPosts.isEmpty) {
+        for (final post in MockDatabase.posts) {
+          await db.insertPost(post);
         }
       }
 
-      // 2. Load posts table
-      final box = await Hive.openBox('posts_box');
-      final raw = box.get('all_posts_key') as String?;
-      if (raw != null && raw.isNotEmpty) {
-        final list = jsonDecode(raw) as List;
-        _posts
-          ..clear()
-          ..addAll(
-            list.map((e) => Post.fromJson(e as Map<String, dynamic>)).toList(),
-          );
-
-        // Merge or update default mock posts in the persisted list
-        bool changedAny = false;
-        for (final mockPost in MockDatabase.posts) {
-          final index = _posts.indexWhere((p) => p.id == mockPost.id);
-          if (index == -1) {
-            _posts.add(mockPost);
-            changedAny = true;
-          } else {
-            final existing = _posts[index];
-            if (existing.videoUrl != mockPost.videoUrl || existing.imageUrl != mockPost.imageUrl) {
-              _posts[index] = existing.copyWith(
-                videoUrl: mockPost.videoUrl,
-                imageUrl: mockPost.imageUrl,
-              );
-              changedAny = true;
-            }
+      // Seed follows if empty
+      final existingFollows = await db.getAllFollows();
+      if (existingFollows.isEmpty) {
+        for (final entry in MockDatabase.follows.entries) {
+          for (final followingId in entry.value) {
+            await db.insertFollow(entry.key, followingId);
           }
         }
-        if (changedAny) {
-          await _persistAllPosts();
-        }
-      } else {
-        // Save initial mock database posts
-        final list = _posts.map((p) => p.toJson()).toList();
-        await box.put('all_posts_key', jsonEncode(list));
       }
 
-      // 3. Load stories
-      final storiesRaw = box.get('all_stories_key') as String?;
-      if (storiesRaw != null && storiesRaw.isNotEmpty) {
-        final list = jsonDecode(storiesRaw) as List;
-        _stories
-          ..clear()
-          ..addAll(
-            list.map((e) => Story.fromJson(e as Map<String, dynamic>)).toList(),
-          );
-      } else {
-        // Save initial mock stories
-        final list = _stories.map((s) => s.toJson()).toList();
-        await box.put('all_stories_key', jsonEncode(list));
+      // Seed stories if empty
+      final existingStories = await db.getAllStories();
+      if (existingStories.isEmpty) {
+        for (final story in MockDatabase.stories) {
+          await db.insertStory(story);
+        }
+      }
+
+      // Load all from SQLite
+      _posts.clear();
+      _posts.addAll(await db.getAllPosts());
+
+      _stories.clear();
+      _stories.addAll(await db.getAllStories());
+
+      _follows.clear();
+      _follows.addAll(await db.getAllFollows());
+
+      final allUsers = await db.getAllUsers();
+      _usersById.clear();
+      for (final user in allUsers) {
+        _usersById[user.id] = user;
       }
     } catch (e) {
       debugPrint('FeedService init error: $e');
     }
     notifyListeners();
-  }
-
-  Future<void> _persistAllPosts() async {
-    try {
-      final box = await Hive.openBox('posts_box');
-      final list = _posts.map((p) => p.toJson()).toList();
-      await box.put('all_posts_key', jsonEncode(list));
-    } catch (_) {}
-  }
-
-  Future<void> _persistFollows() async {
-    try {
-      final box = await Hive.openBox('follows_box');
-      for (final entry in _follows.entries) {
-        await box.put(entry.key, entry.value);
-      }
-    } catch (_) {}
   }
 
   List<Post> get posts => List.unmodifiable(_posts);
@@ -144,26 +106,33 @@ class FeedService extends ChangeNotifier {
   void toggleFollow(String followerId, String followeeId) {
     final list = List<String>.from(followingIdsOf(followerId));
     final wasFollowing = list.contains(followeeId);
+    final db = SqlDatabaseHelper.instance;
+
     if (wasFollowing) {
       list.remove(followeeId);
+      db.deleteFollow(followerId, followeeId);
     } else {
       list.insert(0, followeeId);
+      db.insertFollow(followerId, followeeId);
     }
     _follows[followerId] = list;
 
     final follower = _usersById[followerId];
     final followee = _usersById[followeeId];
     if (follower != null) {
-      _usersById[followerId] = follower.copyWith(
+      final updatedFollower = follower.copyWith(
         following: (follower.following + (wasFollowing ? -1 : 1)).clamp(0, 999999),
       );
+      _usersById[followerId] = updatedFollower;
+      db.insertUser(updatedFollower);
     }
     if (followee != null) {
-      _usersById[followeeId] = followee.copyWith(
+      final updatedFollowee = followee.copyWith(
         followers: (followee.followers + (wasFollowing ? -1 : 1)).clamp(0, 999999),
       );
+      _usersById[followeeId] = updatedFollowee;
+      db.insertUser(updatedFollowee);
     }
-    _persistFollows();
     notifyListeners();
   }
 
@@ -199,21 +168,17 @@ class FeedService extends ChangeNotifier {
     final followed = followingIdsOf(user.id);
     final now = DateTime.now();
 
-    // Filter stories created within the last 24 hours
     final activeStories = _stories.where((s) {
       final diff = now.difference(s.createdAt);
       return diff.inHours < 24;
     }).toList();
 
-    // Gather eligible stories (current user, followed users, and dummy mock accounts)
     final result = activeStories.where((s) {
       return s.user.id == user.id ||
           followed.contains(s.user.id) ||
-          // Include all system mock profiles so the bar is always nicely populated
           true;
     }).toList();
 
-    // Deduplicate by user ID so each user appears once in the story bubbles list
     final seen = <String>{};
     final uniqueResult = <Story>[];
     for (final s in result) {
@@ -232,13 +197,16 @@ class FeedService extends ChangeNotifier {
     final post = _posts[index];
     final liked = post.likedBy.contains(userId);
     final likedBy = List<String>.of(post.likedBy);
+    final db = SqlDatabaseHelper.instance;
+
     if (liked) {
       likedBy.remove(userId);
+      db.removeLike(postId, userId);
     } else {
       likedBy.insert(0, userId);
+      db.addLike(postId, userId);
     }
     _posts[index] = post.copyWith(likedBy: likedBy);
-    _persistAllPosts();
     notifyListeners();
   }
 
@@ -247,43 +215,35 @@ class FeedService extends ChangeNotifier {
     if (index == -1 || text.trim().isEmpty) return;
     final post = _posts[index];
     final comments = List<Comment>.of(post.comments);
-    comments.add(
-      Comment(
-        id: 'c${DateTime.now().millisecondsSinceEpoch}',
-        author: author,
-        text: text.trim(),
-        createdAt: DateTime.now(),
-      ),
+    final newComment = Comment(
+      id: 'c${DateTime.now().millisecondsSinceEpoch}',
+      author: author,
+      text: text.trim(),
+      createdAt: DateTime.now(),
     );
+    comments.add(newComment);
     _posts[index] = post.copyWith(comments: comments);
-    _persistAllPosts();
+
+    SqlDatabaseHelper.instance.insertComment(postId, newComment);
     notifyListeners();
   }
 
   void addPost(Post post) {
     _posts.insert(0, post);
-    _persistAllPosts();
+    SqlDatabaseHelper.instance.insertPost(post);
     notifyListeners();
   }
 
   void deletePost(String postId) {
     _posts.removeWhere((p) => p.id == postId);
     LocalPostStore.instance.delete(postId);
-    _persistAllPosts();
+    SqlDatabaseHelper.instance.deletePost(postId);
     notifyListeners();
-  }
-
-  Future<void> _persistStories() async {
-    try {
-      final box = await Hive.openBox('posts_box');
-      final list = _stories.map((s) => s.toJson()).toList();
-      await box.put('all_stories_key', jsonEncode(list));
-    } catch (_) {}
   }
 
   void addStory(Story story) {
     _stories.insert(0, story);
-    _persistStories();
+    SqlDatabaseHelper.instance.insertStory(story);
     notifyListeners();
   }
 

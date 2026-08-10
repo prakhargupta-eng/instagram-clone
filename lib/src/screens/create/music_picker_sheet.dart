@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:audioplayers/audioplayers.dart';
 import '../../constants.dart';
@@ -65,6 +66,7 @@ class _MusicPickerScreenState extends State<MusicPickerScreen> {
 
       if (response.statusCode == 200) {
         final body = await response.transform(utf8.decoder).join();
+        print('Music Picker API Response: $body');
         final data = jsonDecode(body) as Map<String, dynamic>;
         final results = data['results'] as List<dynamic>? ?? [];
 
@@ -134,7 +136,9 @@ class _MusicPickerScreenState extends State<MusicPickerScreen> {
     final trackName = song['trackName'] as String? ?? 'Unknown Song';
     final artistName = song['artistName'] as String? ?? 'Unknown Artist';
     final previewUrl = song['previewUrl'] as String? ?? '';
-    Navigator.of(context).pop('$trackName - $artistName');
+    Navigator.of(
+      context,
+    ).pop({'name': '$trackName - $artistName', 'previewUrl': previewUrl});
   }
 
   @override
@@ -245,10 +249,8 @@ class _MusicPickerScreenState extends State<MusicPickerScreen> {
                     final previewUrl = song['previewUrl'] as String?;
                     final isSelected =
                         _selectedSong != null &&
-                        (_selectedSong['trackId'] == song['trackId'] ||
-                            (_selectedSong['trackName'] == song['trackName'] &&
-                                _selectedSong['artistName'] ==
-                                    song['artistName']));
+                        (_selectedSong['trackId'] == song['trackId'] &&
+                            _selectedSong['artistName'] == song['artistName']);
                     final isCurrentPlaying =
                         MusicService.instance.player.state ==
                             PlayerState.playing &&
@@ -259,12 +261,12 @@ class _MusicPickerScreenState extends State<MusicPickerScreen> {
                       leading: artworkUrl != null && artworkUrl.isNotEmpty
                           ? ClipRRect(
                               borderRadius: BorderRadius.circular(4),
-                              child: Image.network(
-                                artworkUrl,
+                              child: CachedNetworkImage(
+                                imageUrl: artworkUrl,
                                 width: 40,
                                 height: 40,
                                 fit: BoxFit.cover,
-                                errorBuilder: (_, e, st) => Container(
+                                errorWidget: (_, __, ___) => Container(
                                   width: 40,
                                   height: 40,
                                   color: AppColors.border,

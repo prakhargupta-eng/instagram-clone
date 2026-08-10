@@ -1,5 +1,6 @@
 import 'dart:math';
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 
@@ -447,10 +448,10 @@ class _ExploreTile extends StatelessWidget {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            Image.network(
-              post.imageUrl,
+            CachedNetworkImage(
+              imageUrl: post.imageUrl,
               fit: BoxFit.cover,
-              errorBuilder: (_, _, _) => Container(
+              errorWidget: (_, __, ___) => Container(
                 color: AppColors.border,
                 child: const Icon(
                   Icons.image_not_supported_outlined,
@@ -531,10 +532,10 @@ class _ExploreTile extends StatelessWidget {
   }
 
   Widget _coverImage(Post post) {
-    return Image.network(
-      post.imageUrl,
+    return CachedNetworkImage(
+      imageUrl: post.imageUrl,
       fit: BoxFit.cover,
-      errorBuilder: (_, _, _) => Container(
+      errorWidget: (_, __, ___) => Container(
         color: AppColors.border,
         child: const Icon(
           Icons.image_not_supported_outlined,

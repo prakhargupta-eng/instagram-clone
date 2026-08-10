@@ -65,7 +65,7 @@ class MusicService {
 
   // --- Post Music Logic (Shared between Feed and Profile Detail Screens) ---
   
-  Future<void> playPostMusic(String? musicStr) async {
+  Future<void> playPostMusic(String? musicStr, {String? previewUrl}) async {
     _replaylistTimer?.cancel();
 
     if (musicStr == null || musicStr.isEmpty) {
@@ -74,7 +74,9 @@ class MusicService {
     }
 
     String url = 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3'; // Fallback
-    if (musicStr.contains('|\$\$\$|')) {
+    if (previewUrl != null && previewUrl.isNotEmpty) {
+      url = previewUrl;
+    } else if (musicStr.contains('|\$\$\$|')) {
       final parts = musicStr.split('|\$\$\$|');
       if (parts.length > 1 && parts[1].isNotEmpty) {
         url = parts[1];

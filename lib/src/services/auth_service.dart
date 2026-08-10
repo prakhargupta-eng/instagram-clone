@@ -1,11 +1,11 @@
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
-import 'package:hive/hive.dart';
 
 import '../constants.dart';
 import '../data/mock_data.dart';
 import '../models/user.dart';
+import 'sql_database_helper.dart';
 
 class AuthResult {
   final bool success;
@@ -42,37 +42,33 @@ class AuthService extends ChangeNotifier {
     if (_initialized) return;
     _initialized = true;
     try {
-      final box = await Hive.openBox('auth_box');
-      final storedUsers = box.get(_kRegisteredUsers) as String?;
-      if (storedUsers != null) {
-        try {
-          final list = (jsonDecode(storedUsers) as List)
-              .map((e) => AppUser.fromJson(e as Map<String, dynamic>))
-              .toList();
-          _registeredUsers
-            ..clear()
-            ..addAll(list);
-        } catch (_) {}
+      final db = SqlDatabaseHelper.instance;
+
+      // Seed mock users on first run if database is empty
+      final existingUsers = await db.getAllUsers();
+      if (existingUsers.isEmpty) {
+        for (final user in MockDatabase.users) {
+          await db.insertUser(user);
+          await db.setPassword(user.email, 'password123');
+        }
       }
-      final storedPasswords = box.get(_kPasswords) as String?;
-      if (storedPasswords != null) {
-        try {
-          final map = jsonDecode(storedPasswords) as Map<String, dynamic>;
-          _passwords
-            ..clear()
-            ..addAll(map.map((k, v) => MapEntry(k, v as String)));
-        } catch (_) {}
-      }
-      final storedSession = box.get(_kSessionUser) as String?;
-      if (storedSession != null) {
-        try {
-          final data = jsonDecode(storedSession) as Map<String, dynamic>;
-          final id = data['id'] as String;
-          _currentUser = _registeredUsers.where((u) => u.id == id).firstOrNull ??
-              AppUser.fromJson(data);
+
+      _registeredUsers
+        ..clear()
+        ..addAll(await db.getAllUsers());
+
+      _passwords
+        ..clear()
+        ..addAll(await db.getAllCredentials());
+
+      final sessionUserId = await db.getSessionUserId();
+      if (sessionUserId != null) {
+        _currentUser = _registeredUsers.where((u) => u.id == sessionUserId).firstOrNull;
+        if (_currentUser == null) {
+          _currentUser = await db.getUser(sessionUserId);
+        }
+        if (_currentUser != null) {
           _sessionKey = DateTime.now().millisecondsSinceEpoch.toString();
-        } catch (_) {
-          _currentUser = null;
         }
       }
     } catch (e) {
@@ -82,18 +78,14 @@ class AuthService extends ChangeNotifier {
   }
 
   Future<void> _saveSession(AppUser user) async {
-    final box = await Hive.openBox('auth_box');
-    await box.put(_kSessionUser, jsonEncode(user.toJson()));
-    await box.put(
-      _kRegisteredUsers,
-      jsonEncode(_registeredUsers.map((u) => u.toJson()).toList()),
-    );
-    await box.put(_kPasswords, jsonEncode(_passwords));
+    final db = SqlDatabaseHelper.instance;
+    await db.insertUser(user);
+    await db.saveSession(user.id);
   }
 
   Future<void> _clearSession() async {
-    final box = await Hive.openBox('auth_box');
-    await box.delete(_kSessionUser);
+    final db = SqlDatabaseHelper.instance;
+    await db.clearSession();
   }
 
   Future<AuthResult> login(String email, String password) async {
@@ -105,7 +97,9 @@ class AuthService extends ChangeNotifier {
     if (!_emailRegex.hasMatch(normalized)) {
       return const AuthResult(success: false, error: AppStrings.invalidEmail);
     }
-    final user = _registeredUsers.where((u) => u.email == normalized).firstOrNull;
+    final user = _registeredUsers
+        .where((u) => u.email == normalized)
+        .firstOrNull;
     if (user == null || _passwords[normalized] != password) {
       return const AuthResult(
         success: false,
@@ -138,13 +132,22 @@ class AuthService extends ChangeNotifier {
       return const AuthResult(success: false, error: AppStrings.invalidEmail);
     }
     if (_registeredUsers.any((u) => u.email == normalizedEmail)) {
-      return const AuthResult(success: false, error: AppStrings.emailAlreadyTaken);
+      return const AuthResult(
+        success: false,
+        error: AppStrings.emailAlreadyTaken,
+      );
     }
     if (_registeredUsers.any((u) => u.username == normalizedUsername)) {
-      return const AuthResult(success: false, error: AppStrings.usernameAlreadyTaken);
+      return const AuthResult(
+        success: false,
+        error: AppStrings.usernameAlreadyTaken,
+      );
     }
     if (password.length < 6) {
-      return const AuthResult(success: false, error: AppStrings.passwordTooShort);
+      return const AuthResult(
+        success: false,
+        error: AppStrings.passwordTooShort,
+      );
     }
     final user = AppUser(
       id: 'u${DateTime.now().millisecondsSinceEpoch}',
@@ -158,7 +161,11 @@ class AuthService extends ChangeNotifier {
     _passwords[normalizedEmail] = password;
     _currentUser = user;
     _sessionKey = DateTime.now().millisecondsSinceEpoch.toString();
-    await _saveSession(user);
+    
+    final db = SqlDatabaseHelper.instance;
+    await db.insertUser(user);
+    await db.setPassword(normalizedEmail, password);
+    await db.saveSession(user.id);
     notifyListeners();
     return AuthResult(success: true, user: user);
   }
@@ -176,14 +183,40 @@ class AuthService extends ChangeNotifier {
     final email = _currentUser?.email;
     if (email != null) _passwords.remove(email);
     _currentUser = null;
-    final box = await Hive.openBox('auth_box');
-    await box.delete(_kSessionUser);
-    await box.put(
-      _kRegisteredUsers,
-      jsonEncode(_registeredUsers.map((u) => u.toJson()).toList()),
-    );
-    await box.put(_kPasswords, jsonEncode(_passwords));
+    final db = SqlDatabaseHelper.instance;
+    await db.deleteUser(id);
+    if (email != null) await db.deletePassword(email);
+    await db.clearSession();
     notifyListeners();
+  }
+
+  Future<AuthResult> changePassword({
+    required String oldPassword,
+    required String newPassword,
+  }) async {
+    await Future.delayed(const Duration(milliseconds: 600));
+    final user = _currentUser;
+    if (user == null) {
+      return const AuthResult(success: false, error: 'User is not logged in.');
+    }
+    final email = user.email;
+    final currentPassword = _passwords[email];
+    if (currentPassword != oldPassword) {
+      return const AuthResult(
+        success: false,
+        error: 'Incorrect current password.',
+      );
+    }
+    if (newPassword.length < 6) {
+      return const AuthResult(
+        success: false,
+        error: AppStrings.passwordTooShort,
+      );
+    }
+    _passwords[email] = newPassword;
+    await SqlDatabaseHelper.instance.setPassword(email, newPassword);
+    notifyListeners();
+    return AuthResult(success: true, user: user);
   }
 
   void updateCurrentUser(AppUser updated) {

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:audioplayers/audioplayers.dart';
 
@@ -34,7 +35,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> with RouteAware {
   AppUser get _currentUser => widget.authService.currentUser!;
-  
+
   late final ScrollController _scrollController;
   final Map<String, GlobalKey> _cardKeys = {};
   int _currentIndex = 0;
@@ -155,7 +156,8 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
             });
             _playMusicForPost(_currentFeedList[index]);
           } else {
-            if (MusicService.instance.player.state != PlayerState.playing && !MusicService.instance.userPaused) {
+            if (MusicService.instance.player.state != PlayerState.playing &&
+                !MusicService.instance.userPaused) {
               MusicService.instance.resumePostMusic();
               setState(() {
                 _isPlaying = true;
@@ -180,10 +182,14 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
 
     try {
       await MusicService.instance.setMuted(_isMuted);
-      await MusicService.instance.playPostMusic(post.music);
+      await MusicService.instance.playPostMusic(
+        post.music,
+        previewUrl: post.musicPreviewUrl,
+      );
       if (mounted) {
         setState(() {
-          _isPlaying = MusicService.instance.player.state == PlayerState.playing;
+          _isPlaying =
+              MusicService.instance.player.state == PlayerState.playing;
         });
       }
     } catch (e) {
@@ -235,12 +241,16 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
               height: 27,
               color: AppColors.textPrimary,
               colorBlendMode: BlendMode.srcIn,
-              errorBuilder: (_, _, _) => const Icon(Icons.send_outlined, color: AppColors.textPrimary, size: 27),
+              errorBuilder: (_, _, _) => const Icon(
+                Icons.send_outlined,
+                color: AppColors.textPrimary,
+                size: 27,
+              ),
             ),
             onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const ChatScreen()),
-              );
+              Navigator.of(
+                context,
+              ).push(MaterialPageRoute(builder: (_) => const ChatScreen()));
             },
           ),
         ],
@@ -252,7 +262,10 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
       body: AnimatedBuilder(
         animation: widget.feedService,
         builder: (context, _) {
-          return _buildFeed(widget.feedService.forYouFeed(_currentUser), 'foryou');
+          return _buildFeed(
+            widget.feedService.forYouFeed(_currentUser),
+            'foryou',
+          );
         },
       ),
     );
@@ -287,15 +300,24 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
           key: _getKeyForPost(post.id),
           child: Column(
             children: [
-              const Divider(height: 0.5, thickness: 0.5, color: AppColors.border),
+              const Divider(
+                height: 0.5,
+                thickness: 0.5,
+                color: AppColors.border,
+              ),
               PostCard(
                 post: post,
                 currentUserId: _currentUser.id,
-                author: widget.feedService.userById(post.author.id) ?? post.author,
+                author:
+                    widget.feedService.userById(post.author.id) ?? post.author,
                 isMuted: _isMuted,
-                isActive: _currentIndex == (index - 1 - pending.length) && widget.visible && _isRouteActive,
+                isActive:
+                    _currentIndex == (index - 1 - pending.length) &&
+                    widget.visible &&
+                    _isRouteActive,
                 onMuteToggle: _toggleMute,
-                onLike: () => widget.feedService.toggleLike(post.id, _currentUser.id),
+                onLike: () =>
+                    widget.feedService.toggleLike(post.id, _currentUser.id),
                 onComment: () => showCommentsSheet(
                   context,
                   feedService: widget.feedService,
@@ -309,6 +331,7 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
                     _toggleMute();
                   }
                 },
+                onDelete: () => widget.feedService.deletePost(post.id),
               ),
             ],
           ),
@@ -321,9 +344,7 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
     return Container(
       decoration: const BoxDecoration(
         color: AppColors.surface,
-        border: Border(
-          bottom: BorderSide(color: AppColors.border, width: 0.5),
-        ),
+        border: Border(bottom: BorderSide(color: AppColors.border, width: 0.5)),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Column(
@@ -341,10 +362,10 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
                 ),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(3),
-                  child: Image.network(
-                    upload.imageUrl,
+                  child: CachedNetworkImage(
+                    imageUrl: upload.imageUrl,
                     fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) {
+                    errorWidget: (context, url, error) {
                       return Container(color: AppColors.border);
                     },
                   ),
@@ -371,7 +392,9 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
             child: LinearProgressIndicator(
               value: upload.progress,
               backgroundColor: AppColors.border.withOpacity(0.5),
-              valueColor: const AlwaysStoppedAnimation<Color>(AppColors.primary),
+              valueColor: const AlwaysStoppedAnimation<Color>(
+                AppColors.primary,
+              ),
               minHeight: 3,
             ),
           ),

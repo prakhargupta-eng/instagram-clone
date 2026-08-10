@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
 import '../services/local_post_store.dart';
@@ -37,14 +38,16 @@ class MediaImage extends StatelessWidget {
         errorBuilder: errorBuilder,
       );
     }
-    return Image.network(
-      path,
+    return CachedNetworkImage(
+      imageUrl: path,
       fit: fit,
       width: width,
       height: height,
       color: color,
       colorBlendMode: colorBlendMode,
-      errorBuilder: errorBuilder,
+      errorWidget: errorBuilder != null
+          ? (context, url, error) => errorBuilder!(context, error, null)
+          : null,
     );
   }
 }

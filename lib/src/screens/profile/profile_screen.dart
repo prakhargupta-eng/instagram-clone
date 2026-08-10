@@ -7,9 +7,11 @@ import '../../services/auth_service.dart';
 import '../../services/feed_service.dart';
 import '../../widgets/avatar.dart';
 import 'edit_profile_screen.dart';
+import 'changePassword.dart';
 import 'compontes/Stat.dart';
 import 'compontes/EmptyTab.dart';
 import 'compontes/postTitle.dart';
+import 'package:instagram_clone/src/compontes/ToastHelper.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({
@@ -29,7 +31,10 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen>
     with SingleTickerProviderStateMixin {
-  late final TabController _tabController = TabController(length: 3, vsync: this);
+  late final TabController _tabController = TabController(
+    length: 3,
+    vsync: this,
+  );
 
   FeedService get feedService => widget.feedService;
 
@@ -57,7 +62,11 @@ class _ProfileScreenState extends State<ProfileScreen>
                 if (displayUser.isPrivate)
                   const Padding(
                     padding: EdgeInsets.only(right: 6),
-                    child: Icon(Icons.lock_outline, size: 16, color: AppColors.textPrimary),
+                    child: Icon(
+                      Icons.lock_outline,
+                      size: 16,
+                      color: AppColors.textPrimary,
+                    ),
                   ),
                 Text(
                   displayUser.username,
@@ -85,11 +94,15 @@ class _ProfileScreenState extends State<ProfileScreen>
         builder: (context, _) {
           final displayUser = _displayUser;
           final liveUser = feedService.userById(displayUser.id) ?? displayUser;
-          final posts =
-              feedService.posts.where((p) => p.author.id == displayUser.id).toList();
+          final posts = feedService.posts
+              .where((p) => p.author.id == displayUser.id)
+              .toList();
           final isFollowing = widget.authService == null
               ? false
-              : feedService.isFollowing(widget.authService!.currentUser!.id, displayUser.id);
+              : feedService.isFollowing(
+                  widget.authService!.currentUser!.id,
+                  displayUser.id,
+                );
           return ListView(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             children: [
@@ -104,8 +117,14 @@ class _ProfileScreenState extends State<ProfileScreen>
                       mainAxisAlignment: MainAxisAlignment.spaceAround,
                       children: [
                         Stat(label: '${posts.length}', value: 'Posts'),
-                        Stat(label: '${liveUser.followers}', value: 'Followers'),
-                        Stat(label: '${liveUser.following}', value: 'Following'),
+                        Stat(
+                          label: '${liveUser.followers}',
+                          value: 'Followers',
+                        ),
+                        Stat(
+                          label: '${liveUser.following}',
+                          value: 'Following',
+                        ),
                       ],
                     ),
                   ),
@@ -118,14 +137,18 @@ class _ProfileScreenState extends State<ProfileScreen>
               ),
               if (displayUser.bio.isNotEmpty) ...[
                 const SizedBox(height: 2),
-                Text(displayUser.bio, style: const TextStyle(color: AppColors.textSecondary)),
+                Text(
+                  displayUser.bio,
+                  style: const TextStyle(color: AppColors.textSecondary),
+                ),
               ],
               if (displayUser.website.isNotEmpty) ...[
                 const SizedBox(height: 4),
                 GestureDetector(
                   onTap: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Opening: ${displayUser.website}')),
+                    ToastHelper.showToast(
+                      context,
+                      "Opening: ${displayUser.website}",
                     );
                   },
                   child: Text(
@@ -147,13 +170,22 @@ class _ProfileScreenState extends State<ProfileScreen>
                         child: OutlinedButton(
                           onPressed: () => _openEditProfile(context),
                           style: OutlinedButton.styleFrom(
-                            side: const BorderSide(color: AppColors.border, width: 0.8),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                            side: const BorderSide(
+                              color: AppColors.border,
+                              width: 0.8,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(6),
+                            ),
                             padding: EdgeInsets.zero,
                           ),
                           child: const Text(
                             'Edit profile',
-                            style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w600, fontSize: 13),
+                            style: TextStyle(
+                              color: AppColors.textPrimary,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 13,
+                            ),
                           ),
                         ),
                       ),
@@ -164,18 +196,28 @@ class _ProfileScreenState extends State<ProfileScreen>
                         height: 32,
                         child: OutlinedButton(
                           onPressed: () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Profile link copied')),
+                            ToastHelper.showToast(
+                              context,
+                              "Profile link copied",
                             );
                           },
                           style: OutlinedButton.styleFrom(
-                            side: const BorderSide(color: AppColors.border, width: 0.8),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                            side: const BorderSide(
+                              color: AppColors.border,
+                              width: 0.8,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(6),
+                            ),
                             padding: EdgeInsets.zero,
                           ),
                           child: const Text(
                             'Share profile',
-                            style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w600, fontSize: 13),
+                            style: TextStyle(
+                              color: AppColors.textPrimary,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 13,
+                            ),
                           ),
                         ),
                       ),
@@ -188,12 +230,20 @@ class _ProfileScreenState extends State<ProfileScreen>
                   child: OutlinedButton(
                     onPressed: () => _toggleFollow(context),
                     style: OutlinedButton.styleFrom(
-                      side: const BorderSide(color: AppColors.border, width: 0.8),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                      side: const BorderSide(
+                        color: AppColors.border,
+                        width: 0.8,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(6),
+                      ),
                     ),
                     child: Text(
                       _buttonLabel(isFollowing),
-                      style: const TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w600),
+                      style: const TextStyle(
+                        color: AppColors.textPrimary,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
                 ),
@@ -280,10 +330,8 @@ class _ProfileScreenState extends State<ProfileScreen>
     final auth = widget.authService!;
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => EditProfileScreen(
-          authService: auth,
-          user: auth.currentUser!,
-        ),
+        builder: (_) =>
+            EditProfileScreen(authService: auth, user: auth.currentUser!),
       ),
     );
   }
@@ -292,16 +340,7 @@ class _ProfileScreenState extends State<ProfileScreen>
     final current = widget.authService?.currentUser;
     if (current == null) return;
     feedService.toggleFollow(current.id, _displayUser.id);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          feedService.isFollowing(current.id, _displayUser.id)
-              ? 'Following ${_displayUser.username}'
-              : 'Unfollowed ${_displayUser.username}',
-        ),
-        duration: const Duration(seconds: 1),
-      ),
-    );
+    ToastHelper.showToast(context, "Following ${_displayUser.username}");
   }
 
   void _showMenuSheet(BuildContext context) {
@@ -334,8 +373,27 @@ class _ProfileScreenState extends State<ProfileScreen>
   List<Widget> _accountMenuItems(BuildContext ctx) {
     return [
       ListTile(
+        leading: const Icon(Icons.password),
+        title: const Text(
+          AppStrings.changePassword,
+          style: TextStyle(fontWeight: FontWeight.w500),
+        ),
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) =>
+                  ChangePasswordScreen(authService: widget.authService!),
+            ),
+          );
+        },
+      ),
+      ListTile(
         leading: const Icon(Icons.logout),
-        title: const Text(AppStrings.logout, style: TextStyle(fontWeight: FontWeight.w500)),
+        title: const Text(
+          AppStrings.logout,
+          style: TextStyle(fontWeight: FontWeight.w500),
+        ),
         onTap: () {
           Navigator.of(ctx).pop();
           _confirmLogout(ctx);
@@ -344,8 +402,10 @@ class _ProfileScreenState extends State<ProfileScreen>
       const Divider(height: 1),
       ListTile(
         leading: const Icon(Icons.delete_outline, color: AppColors.error),
-        title: const Text(AppStrings.deleteAccount,
-            style: TextStyle(fontWeight: FontWeight.w500, color: AppColors.error)),
+        title: const Text(
+          AppStrings.deleteAccount,
+          style: TextStyle(fontWeight: FontWeight.w500, color: AppColors.error),
+        ),
         onTap: () {
           Navigator.of(ctx).pop();
           _confirmDeleteAccount(ctx);
@@ -374,6 +434,7 @@ class _ProfileScreenState extends State<ProfileScreen>
     );
     if (confirmed == true) {
       await widget.authService?.logout();
+      ToastHelper.showToast(context, "Logged out successfully.");
     }
   }
 
@@ -390,18 +451,17 @@ class _ProfileScreenState extends State<ProfileScreen>
           ),
           TextButton(
             onPressed: () => Navigator.of(context).pop(true),
-            child: const Text(AppStrings.deleteAccount,
-                style: TextStyle(color: AppColors.error)),
+            child: const Text(
+              AppStrings.deleteAccount,
+              style: TextStyle(color: AppColors.error),
+            ),
           ),
         ],
       ),
     );
     if (confirmed == true) {
       await widget.authService?.deleteAccount();
+      ToastHelper.showToast(context, "Account deleted successfully.");
     }
   }
 }
-
-
-
-

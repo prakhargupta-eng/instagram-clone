@@ -38,6 +38,7 @@ class Post {
   final String caption;
   final String? location;
   final String? music;
+  final String? musicPreviewUrl;
   final DateTime createdAt;
   final List<String> likedBy;
   final List<Comment> comments;
@@ -52,6 +53,7 @@ class Post {
     this.videoUrl = '',
     this.location,
     this.music,
+    this.musicPreviewUrl,
     this.likedBy = const [],
     this.comments = const [],
     this.isVideo = false,
@@ -70,6 +72,7 @@ class Post {
       caption: json['caption'] ?? '',
       location: json['location'],
       music: json['music'],
+      musicPreviewUrl: json['musicPreviewUrl'],
       createdAt: DateTime.parse(json['createdAt']),
       likedBy: List<String>.from(json['likedBy'] ?? []),
       comments: (json['comments'] as List? ?? [])
@@ -87,6 +90,7 @@ class Post {
         'caption': caption,
         'location': location,
         'music': music,
+        'musicPreviewUrl': musicPreviewUrl,
         'createdAt': createdAt.toIso8601String(),
         'likedBy': likedBy,
         'comments': comments.map((c) => c.toJson()).toList(),
@@ -98,6 +102,7 @@ class Post {
     String? caption,
     String? location,
     String? music,
+    String? musicPreviewUrl,
     List<String>? likedBy,
     List<Comment>? comments,
     String? videoUrl,
@@ -111,6 +116,7 @@ class Post {
       caption: caption ?? this.caption,
       location: location ?? this.location,
       music: music ?? this.music,
+      musicPreviewUrl: musicPreviewUrl ?? this.musicPreviewUrl,
       createdAt: createdAt,
       likedBy: likedBy ?? this.likedBy,
       comments: comments ?? this.comments,

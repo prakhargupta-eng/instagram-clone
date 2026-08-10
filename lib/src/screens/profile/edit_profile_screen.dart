@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:instagram_clone/src/compontes/ToastHelper.dart';
+import 'package:instagram_clone/src/utils/validation.dart';
 
 import '../../constants.dart';
 import '../../models/user.dart';
@@ -32,6 +34,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   bool _saving = false;
 
   final ImagePicker _imagePicker = ImagePicker();
+  final _formKey = GlobalKey<FormState>();
 
   Future<void> _pickAvatarFromGallery() async {
     final picked = await _imagePicker.pickImage(
@@ -51,7 +54,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     _bioController = TextEditingController(text: widget.user.bio);
     _websiteController = TextEditingController(text: widget.user.website);
     _gender = widget.user.gender;
-    _genderController = TextEditingController(text: _gender.isEmpty ? 'Not specified' : _gender);
+    _genderController = TextEditingController(
+      text: _gender.isEmpty ? 'Not specified' : _gender,
+    );
     _avatarUrl = widget.user.avatarUrl;
     _isPrivate = widget.user.isPrivate;
   }
@@ -67,19 +72,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   }
 
   void _save() {
-    final username = _usernameController.text.trim();
-    final fullName = _fullNameController.text.trim();
-    if (username.isEmpty || fullName.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text(AppStrings.fillAllFields)),
-      );
-      return;
-    }
+    if (!_formKey.currentState!.validate()) return;
     setState(() => _saving = true);
     widget.authService.updateCurrentUser(
       widget.user.copyWith(
-        username: username,
-        fullName: fullName,
+        username: _usernameController.text.trim(),
+        fullName: _fullNameController.text.trim(),
         bio: _bioController.text.trim(),
         avatarUrl: _avatarUrl,
         website: _websiteController.text.trim(),
@@ -88,9 +86,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       ),
     );
     Navigator.of(context).pop();
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Profile updated')),
-    );
+    ToastHelper.showToast(context, 'Profile updated successfully.');
   }
 
   void _showGenderPicker() {
@@ -101,7 +97,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
       ),
       builder: (context) {
-        final options = ['Male', 'Female', 'Prefer not to say', 'Custom'];
+        final options = ['Male', 'Female', 'Prefer not to say'];
         return SafeArea(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -118,12 +114,19 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               const SizedBox(height: 12),
               const Text(
                 'Gender',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textPrimary,
+                ),
               ),
               const Divider(height: 24),
               for (final option in options)
                 ListTile(
-                  title: Text(option, style: const TextStyle(color: AppColors.textPrimary)),
+                  title: Text(
+                    option,
+                    style: const TextStyle(color: AppColors.textPrimary),
+                  ),
                   onTap: () {
                     setState(() {
                       _gender = option;
@@ -146,7 +149,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       child: Scaffold(
         backgroundColor: AppColors.surface,
         appBar: AppBar(
-          title: const Text('Edit profile', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+          title: const Text(
+            'Edit profile',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+          ),
           leading: IconButton(
             icon: const Icon(Icons.close),
             onPressed: () => Navigator.of(context).maybePop(),
@@ -156,42 +162,68 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               onPressed: _saving ? null : _save,
               child: Text(
                 _saving ? 'Saving...' : AppStrings.done,
-                style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w700, fontSize: 16),
+                style: const TextStyle(
+                  color: AppColors.primary,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 16,
+                ),
               ),
             ),
             const SizedBox(width: 8),
           ],
         ),
-        body: ListView(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          children: [
-            const SizedBox(height: 16),
-            Center(
-              child: Column(
-                children: [
-                  Avatar(url: _avatarUrl, radius: 42),
-                  const SizedBox(height: 10),
-                  GestureDetector(
-                    onTap: _pickAvatarFromGallery,
-                    child: const Text(
-                      'Edit picture or avatar',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.primary,
+        body: Form(
+          key: _formKey,
+          child: ListView(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            children: [
+              const SizedBox(height: 16),
+              Center(
+                child: Column(
+                  children: [
+                    Avatar(url: _avatarUrl, radius: 42),
+                    const SizedBox(height: 10),
+                    GestureDetector(
+                      onTap: _pickAvatarFromGallery,
+                      child: const Text(
+                        'Edit picture or avatar',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.primary,
+                        ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(height: 24),
-            _rowField(label: 'Name', controller: _fullNameController),
-            _rowField(label: 'Username', controller: _usernameController),
-            _rowField(label: 'Website', controller: _websiteController, hintText: 'Add link'),
-            _rowField(label: 'Bio', controller: _bioController, maxLines: 3),
-            _buildPrivateSection(),
-          ],
+              const SizedBox(height: 24),
+              _rowField(
+                label: 'Name',
+                controller: _fullNameController,
+                hintText: 'Enter name',
+                validator: Validators.validateFullName,
+              ),
+              _rowField(
+                label: 'Username',
+                controller: _usernameController,
+                hintText: 'Enter username',
+                validator: Validators.validateUsername,
+              ),
+              _rowField(
+                label: 'Website',
+                controller: _websiteController,
+                hintText: 'Add link',
+              ),
+              _rowField(
+                label: 'Bio',
+                controller: _bioController,
+                maxLines: 3,
+                hintText: 'Enter bio ',
+              ),
+              _buildPrivateSection(),
+            ],
+          ),
         ),
       ),
     );
@@ -200,6 +232,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   Widget _rowField({
     required String label,
     required TextEditingController controller,
+    String? Function(String?)? validator,
     int maxLines = 1,
     bool readOnly = false,
     VoidCallback? onTap,
@@ -228,15 +261,22 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             ),
           ),
           Expanded(
-            child: TextField(
+            child: TextFormField(
               controller: controller,
               maxLines: maxLines,
               readOnly: readOnly,
               onTap: onTap,
-              style: const TextStyle(fontSize: 15, color: AppColors.textPrimary),
+              style: const TextStyle(
+                fontSize: 15,
+                color: AppColors.textPrimary,
+              ),
+              validator: validator,
               decoration: InputDecoration(
                 hintText: hintText,
-                hintStyle: const TextStyle(color: AppColors.textSecondary, fontSize: 15),
+                hintStyle: const TextStyle(
+                  color: AppColors.textSecondary,
+                  fontSize: 15,
+                ),
                 border: InputBorder.none,
                 isDense: true,
                 contentPadding: const EdgeInsets.symmetric(vertical: 6),
@@ -271,7 +311,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         Container(
           padding: const EdgeInsets.symmetric(vertical: 8),
           decoration: const BoxDecoration(
-            border: Border(bottom: BorderSide(color: AppColors.border, width: 0.5)),
+            border: Border(
+              bottom: BorderSide(color: AppColors.border, width: 0.5),
+            ),
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,

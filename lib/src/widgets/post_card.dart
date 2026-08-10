@@ -1,7 +1,7 @@
 import 'dart:io';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
+import 'package:intl/intl.dart' hide TextDirection;
 import 'package:video_player/video_player.dart' as video;
 
 import '../constants.dart';
@@ -10,6 +10,7 @@ import '../models/user.dart';
 import '../services/local_post_store.dart';
 import 'avatar.dart';
 import 'media_image.dart';
+import 'package:instagram_clone/src/compontes/ToastHelper.dart';
 
 class PostCard extends StatefulWidget {
   const PostCard({
@@ -25,6 +26,7 @@ class PostCard extends StatefulWidget {
     this.isMuted = false,
     this.isActive = false,
     this.onMuteToggle,
+    this.onDelete,
   });
 
   final Post post;
@@ -38,18 +40,21 @@ class PostCard extends StatefulWidget {
   final bool isMuted;
   final bool isActive;
   final VoidCallback? onMuteToggle;
+  final VoidCallback? onDelete;
 
   @override
   State<PostCard> createState() => _PostCardState();
 }
 
-class _PostCardState extends State<PostCard> with SingleTickerProviderStateMixin {
+class _PostCardState extends State<PostCard>
+    with SingleTickerProviderStateMixin {
   late final AnimationController _heartAnimController;
   late final Animation<double> _heartScale;
   bool _showHeartOverlay = false;
 
   video.VideoPlayerController? _videoController;
   bool _videoInitialized = false;
+  bool _isCaptionExpanded = false;
 
   @override
   void initState() {
@@ -60,18 +65,24 @@ class _PostCardState extends State<PostCard> with SingleTickerProviderStateMixin
     );
     _heartScale = TweenSequence<double>([
       TweenSequenceItem(
-        tween: Tween<double>(begin: 0.0, end: 1.2)
-            .chain(CurveTween(curve: Curves.easeOut)),
+        tween: Tween<double>(
+          begin: 0.0,
+          end: 1.2,
+        ).chain(CurveTween(curve: Curves.easeOut)),
         weight: 35,
       ),
       TweenSequenceItem(
-        tween: Tween<double>(begin: 1.2, end: 0.9)
-            .chain(CurveTween(curve: Curves.easeInOut)),
+        tween: Tween<double>(
+          begin: 1.2,
+          end: 0.9,
+        ).chain(CurveTween(curve: Curves.easeInOut)),
         weight: 35,
       ),
       TweenSequenceItem(
-        tween: Tween<double>(begin: 0.9, end: 0.0)
-            .chain(CurveTween(curve: Curves.easeIn)),
+        tween: Tween<double>(
+          begin: 0.9,
+          end: 0.0,
+        ).chain(CurveTween(curve: Curves.easeIn)),
         weight: 30,
       ),
     ]).animate(_heartAnimController);
@@ -87,19 +98,22 @@ class _PostCardState extends State<PostCard> with SingleTickerProviderStateMixin
         ? video.VideoPlayerController.file(File(path))
         : video.VideoPlayerController.networkUrl(Uri.parse(path));
 
-    _videoController!.initialize().then((_) {
-      if (!mounted) return;
-      _videoController!.setLooping(true);
-      _videoController!.setVolume(widget.isMuted ? 0.0 : 1.0);
-      setState(() {
-        _videoInitialized = true;
-      });
-      if (widget.isActive) {
-        _videoController!.play();
-      }
-    }).catchError((e) {
-      debugPrint('PostCard video init error: $e');
-    });
+    _videoController!
+        .initialize()
+        .then((_) {
+          if (!mounted) return;
+          _videoController!.setLooping(true);
+          _videoController!.setVolume(widget.isMuted ? 0.0 : 1.0);
+          setState(() {
+            _videoInitialized = true;
+          });
+          if (widget.isActive) {
+            _videoController!.play();
+          }
+        })
+        .catchError((e) {
+          debugPrint('PostCard video init error: $e');
+        });
   }
 
   @override
@@ -187,7 +201,8 @@ class _PostCardState extends State<PostCard> with SingleTickerProviderStateMixin
                     fontSize: 14,
                   ),
                 ),
-                if (widget.post.location != null && widget.post.location!.isNotEmpty)
+                if (widget.post.location != null &&
+                    widget.post.location!.isNotEmpty)
                   Text(
                     widget.post.location!,
                     style: const TextStyle(
@@ -203,13 +218,17 @@ class _PostCardState extends State<PostCard> with SingleTickerProviderStateMixin
                       children: [
                         MusicVisualizer(isPlaying: !widget.isMuted),
                         const SizedBox(width: 4),
-                        Text(
-                          widget.post.music!.contains('|\$\$\$|')
-                              ? widget.post.music!.split('|\$\$\$|')[0]
-                              : widget.post.music!,
-                          style: const TextStyle(
-                            fontSize: 11,
-                            color: AppColors.textSecondary,
+                        Expanded(
+                          child: Text(
+                            widget.post.music!.contains('|\$\$\$|')
+                                ? widget.post.music!.split('|\$\$\$|')[0]
+                                : widget.post.music!,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 11,
+                              color: AppColors.textSecondary,
+                            ),
                           ),
                         ),
                       ],
@@ -218,17 +237,24 @@ class _PostCardState extends State<PostCard> with SingleTickerProviderStateMixin
               ],
             ),
           ),
-          IconButton(
-            icon: const Icon(Icons.more_horiz, size: 22, color: AppColors.textPrimary),
-            onPressed: () {},
-          ),
+          if (widget.post.author.id == widget.currentUserId)
+            IconButton(
+              icon: const Icon(
+                Icons.more_horiz,
+                size: 22,
+                color: AppColors.textPrimary,
+              ),
+              onPressed: () => _showPostOptionsBottomSheet(context),
+            ),
         ],
       ),
     );
   }
 
   Widget _media(BuildContext context) {
-    final showVolumeIcon = widget.post.isVideo || (widget.post.music != null && widget.post.music!.isNotEmpty);
+    final showVolumeIcon =
+        widget.post.isVideo ||
+        (widget.post.music != null && widget.post.music!.isNotEmpty);
 
     return GestureDetector(
       onDoubleTap: _triggerDoubleTapLike,
@@ -248,7 +274,10 @@ class _PostCardState extends State<PostCard> with SingleTickerProviderStateMixin
         children: [
           AspectRatio(
             aspectRatio: 1,
-            child: widget.post.isVideo && _videoInitialized && _videoController != null
+            child:
+                widget.post.isVideo &&
+                    _videoInitialized &&
+                    _videoController != null
                 ? ClipRect(
                     child: FittedBox(
                       fit: BoxFit.cover,
@@ -369,12 +398,7 @@ class _PostCardState extends State<PostCard> with SingleTickerProviderStateMixin
           // Share / Send button
           GestureDetector(
             onTap: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Sharing feature coming soon!'),
-                  duration: Duration(seconds: 1),
-                ),
-              );
+              ToastHelper.showToast(context, 'Sharing feature coming soon!');
             },
             child: Padding(
               padding: const EdgeInsets.all(6),
@@ -437,26 +461,83 @@ class _PostCardState extends State<PostCard> with SingleTickerProviderStateMixin
     );
   }
 
+  bool _shouldShowMore(
+    String text,
+    String username,
+    double maxWidth,
+    TextStyle style,
+  ) {
+    final textPainter = TextPainter(
+      text: TextSpan(
+        style: style,
+        children: [
+          TextSpan(
+            text: '$username ',
+            style: const TextStyle(fontWeight: FontWeight.w700),
+          ),
+          TextSpan(text: text),
+          const TextSpan(text: ' more'),
+        ],
+      ),
+      maxLines: 2,
+      textDirection: TextDirection.ltr,
+    );
+    textPainter.layout(maxWidth: maxWidth);
+    return textPainter.didExceedMaxLines;
+  }
+
   Widget _caption(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 3, 12, 0),
-      child: RichText(
-        maxLines: 2,
-        overflow: TextOverflow.ellipsis,
-        text: TextSpan(
-          style: const TextStyle(color: AppColors.textPrimary, fontSize: 13.5, height: 1.35),
-          children: [
-            TextSpan(
-              text: '${widget.author.username} ',
-              style: const TextStyle(fontWeight: FontWeight.w700),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          const textStyle = TextStyle(
+            color: AppColors.textPrimary,
+            fontSize: 13.5,
+            height: 1.35,
+          );
+
+          final showMoreButton = _shouldShowMore(
+            widget.post.caption,
+            widget.author.username,
+            constraints.maxWidth,
+            textStyle,
+          );
+
+          return GestureDetector(
+            onTap: () {
+              if (showMoreButton) {
+                setState(() {
+                  _isCaptionExpanded = !_isCaptionExpanded;
+                });
+              }
+            },
+            child: RichText(
+              maxLines: _isCaptionExpanded ? null : 2,
+              overflow: _isCaptionExpanded
+                  ? TextOverflow.clip
+                  : TextOverflow.ellipsis,
+              text: TextSpan(
+                style: textStyle,
+                children: [
+                  TextSpan(
+                    text: '${widget.author.username} ',
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  TextSpan(text: widget.post.caption),
+                  if (showMoreButton)
+                    TextSpan(
+                      text: _isCaptionExpanded ? ' less' : ' more',
+                      style: const TextStyle(
+                        color: AppColors.textSecondary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                ],
+              ),
             ),
-            TextSpan(text: widget.post.caption),
-            const TextSpan(
-              text: ' more',
-              style: TextStyle(color: AppColors.textSecondary),
-            ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }
@@ -504,6 +585,150 @@ class _PostCardState extends State<PostCard> with SingleTickerProviderStateMixin
     if (diff.inDays < 7) return '${diff.inDays} days ago';
     return DateFormat('MMM d').format(time);
   }
+
+  void _showPostOptionsBottomSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
+      ),
+      builder: (context) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 8),
+              Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: AppColors.border,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 16),
+              ListTile(
+                leading: const Icon(Icons.delete_outline, color: Colors.red),
+                title: const Text(
+                  'Delete Post',
+                  style: TextStyle(
+                    color: Colors.red,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                onTap: () {
+                  Navigator.of(context).pop();
+                  _showDeleteConfirmationDialog(context);
+                },
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _showDeleteConfirmationDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return Dialog(
+          backgroundColor: AppColors.surface,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  vertical: 24,
+                  horizontal: 16,
+                ),
+                child: Column(
+                  children: [
+                    const Text(
+                      'Delete Post?',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textPrimary,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Are you sure you want to delete this post? This action cannot be undone.',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: AppColors.textSecondary,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(
+                height: 0.5,
+                thickness: 0.5,
+                color: AppColors.border,
+              ),
+              Row(
+                children: [
+                  Expanded(
+                    child: SizedBox(
+                      height: 48,
+                      child: TextButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        style: TextButton.styleFrom(
+                          foregroundColor: AppColors.textPrimary,
+                          padding: EdgeInsets.zero,
+                        ),
+                        child: const Text(
+                          'Cancel',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w400,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  Container(width: 0.5, height: 48, color: AppColors.border),
+                  Expanded(
+                    child: SizedBox(
+                      height: 48,
+                      child: TextButton(
+                        onPressed: () {
+                          Navigator.of(context).pop();
+                          if (widget.onDelete != null) {
+                            widget.onDelete!();
+                          }
+                        },
+                        style: TextButton.styleFrom(
+                          foregroundColor: Colors.red,
+                          padding: EdgeInsets.zero,
+                        ),
+                        child: const Text(
+                          'Delete',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
 }
 
 class MusicVisualizer extends StatefulWidget {
@@ -514,7 +739,8 @@ class MusicVisualizer extends StatefulWidget {
   State<MusicVisualizer> createState() => _MusicVisualizerState();
 }
 
-class _MusicVisualizerState extends State<MusicVisualizer> with SingleTickerProviderStateMixin {
+class _MusicVisualizerState extends State<MusicVisualizer>
+    with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
 
   @override
@@ -552,15 +778,18 @@ class _MusicVisualizerState extends State<MusicVisualizer> with SingleTickerProv
     if (!widget.isPlaying) {
       return Row(
         mainAxisSize: MainAxisSize.min,
-        children: List.generate(3, (index) => Container(
-          margin: const EdgeInsets.symmetric(horizontal: 0.8),
-          width: 1.8,
-          height: 4,
-          decoration: BoxDecoration(
-            color: AppColors.textSecondary,
-            borderRadius: BorderRadius.circular(0.5),
+        children: List.generate(
+          3,
+          (index) => Container(
+            margin: const EdgeInsets.symmetric(horizontal: 0.8),
+            width: 1.8,
+            height: 4,
+            decoration: BoxDecoration(
+              color: AppColors.textSecondary,
+              borderRadius: BorderRadius.circular(0.5),
+            ),
           ),
-        )),
+        ),
       );
     }
 
@@ -573,9 +802,27 @@ class _MusicVisualizerState extends State<MusicVisualizer> with SingleTickerProv
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              _bar(0.3 + 0.7 * (0.5 + 0.5 * math.sin(_controller.value * 2 * math.pi + 0))),
-              _bar(0.3 + 0.7 * (0.5 + 0.5 * math.sin(_controller.value * 2 * math.pi + 2))),
-              _bar(0.3 + 0.7 * (0.5 + 0.5 * math.sin(_controller.value * 2 * math.pi + 4))),
+              _bar(
+                0.3 +
+                    0.7 *
+                        (0.5 +
+                            0.5 *
+                                math.sin(_controller.value * 2 * math.pi + 0)),
+              ),
+              _bar(
+                0.3 +
+                    0.7 *
+                        (0.5 +
+                            0.5 *
+                                math.sin(_controller.value * 2 * math.pi + 2)),
+              ),
+              _bar(
+                0.3 +
+                    0.7 *
+                        (0.5 +
+                            0.5 *
+                                math.sin(_controller.value * 2 * math.pi + 4)),
+              ),
             ],
           ),
         );

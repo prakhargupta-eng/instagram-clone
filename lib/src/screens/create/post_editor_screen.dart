@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
+import 'package:instagram_clone/src/compontes/ToastHelper.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:video_player/video_player.dart' as video;
 
@@ -155,9 +156,7 @@ class _PostEditorScreenState extends State<PostEditorScreen> {
         setState(() {
           _isProcessing = false;
         });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to process image: $e')),
-        );
+        ToastHelper.showToast(context, "failed to process image: $e", isError: true);
       }
     }
   }

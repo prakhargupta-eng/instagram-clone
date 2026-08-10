@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:instagram_clone/src/compontes/auth_text_field.dart';
 
 import '../../constants.dart';
 import '../../widgets/insta_logo.dart';
 import '../../services/auth_service.dart';
+import '../../utils/validation.dart';
 import 'signup_screen.dart';
+import 'package:instagram_clone/src/compontes/ToastHelper.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key, required this.authService});
@@ -52,6 +55,12 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() {});
   }
 
+  void _clearServerError() {
+    if (_error != null) {
+      setState(() => _error = null);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
@@ -70,37 +79,29 @@ class _LoginScreenState extends State<LoginScreen> {
                     const SizedBox(height: 24),
                     const InstaLogo(),
                     const SizedBox(height: 40),
-                    TextFormField(
+                    AuthTextField(
                       controller: _emailController,
+                      hintText: AppStrings.email,
                       keyboardType: TextInputType.emailAddress,
-                      decoration: const InputDecoration(hintText: AppStrings.email),
-                      autovalidateMode: AutovalidateMode.onUserInteraction,
-                      onChanged: (_) {
-                        if (_error != null) setState(() => _error = null);
-                      },
-                      validator: (v) {
-                        if (v == null || v.trim().isEmpty) return AppStrings.emailRequired;
-                        final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
-                        if (!emailRegex.hasMatch(v.trim())) return 'Enter a valid email address';
-                        return null;
-                      },
+                      onChanged: (_) => _clearServerError(),
+                      validator: Validators.validateEmail,
                     ),
                     const SizedBox(height: 10),
-                    TextFormField(
+                    AuthTextField(
                       controller: _passwordController,
+                      hintText: AppStrings.password,
                       obscureText: _obscure,
-                      decoration: InputDecoration(
-                        hintText: AppStrings.password,
-                        suffixIcon: IconButton(
-                          icon: Icon(_obscure ? Icons.visibility_off_outlined : Icons.visibility_outlined, size: 20),
-                          onPressed: () => setState(() => _obscure = !_obscure),
+                      onChanged: (_) => _clearServerError(),
+                      validator: Validators.validatePassword,
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          _obscure
+                              ? Icons.visibility_off_outlined
+                              : Icons.visibility_outlined,
+                          size: 20,
                         ),
+                        onPressed: () => setState(() => _obscure = !_obscure),
                       ),
-                      autovalidateMode: AutovalidateMode.onUserInteraction,
-                      onChanged: (_) {
-                        if (_error != null) setState(() => _error = null);
-                      },
-                      validator: (v) => (v == null || v.isEmpty) ? 'Password is required' : null,
                       onFieldSubmitted: (_) => _submit(),
                     ),
                     if (_error != null) ...[
@@ -118,69 +119,15 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                     ],
                     const SizedBox(height: 16),
-                    SizedBox(
-                      height: 44,
-                      child: ElevatedButton(
-                        onPressed: _loading ? null : _submit,
-                        child: _loading
-                            ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.surface))
-                            : const Text(AppStrings.logIn),
-                      ),
-                    ),
+                    _buildSubmitButton(),
                     const SizedBox(height: 18),
-                    Row(
-                      children: [
-                        const Expanded(child: Divider()),
-                        const Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 12),
-                          child: Text(AppStrings.or, style: TextStyle(color: AppColors.textSecondary, fontSize: 13, fontWeight: FontWeight.w600)),
-                        ),
-                        const Expanded(child: Divider()),
-                      ],
-                    ),
+                    _buildOrDivider(),
                     const SizedBox(height: 18),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        TextButton.icon(
-                          onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text(AppStrings.facebookLoginMock)),
-                          ),
-                          icon: const Icon(Icons.facebook, color: AppColors.primaryDark, size: 22),
-                          label: const Text(AppStrings.logInWithFacebook, style: TextStyle(color: AppColors.primaryDark)),
-                        ),
-                      ],
-                    ),
+                    _buildFacebookButton(),
                     const SizedBox(height: 30),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Text(AppStrings.dontHaveAccount, style: TextStyle(color: AppColors.textSecondary)),
-                        TextButton(
-                          onPressed: () => Navigator.of(context).push(
-                            MaterialPageRoute(builder: (_) => SignupScreen(authService: widget.authService)),
-                          ),
-                          child: const Text(AppStrings.signUp),
-                        ),
-                      ],
-                    ),
+                    _buildSignUpLink(),
                     const SizedBox(height: 24),
-                    const Text(
-                      AppStrings.demoAccounts,
-                      style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: AppColors.textSecondary),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      alignment: WrapAlignment.center,
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: const [
-                        _DemoChip(label: 'alice@example.com'),
-                        _DemoChip(label: 'marco@example.com'),
-                        _DemoChip(label: 'priya@example.com'),
-                      ],
-                    ),
+                    _buildDemoAccounts(),
                     const SizedBox(height: 24),
                   ],
                 ),
@@ -189,6 +136,111 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
         ),
       ),
+    );
+  }
+  Widget _buildSubmitButton() {
+    return SizedBox(
+      height: 44,
+      child: ElevatedButton(
+        onPressed: _loading ? null : _submit,
+        child: _loading
+            ? const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: AppColors.surface,
+                ),
+              )
+            : const Text(AppStrings.logIn),
+      ),
+    );
+  }
+
+  Widget _buildOrDivider() {
+    return Row(
+      children: [
+        const Expanded(child: Divider()),
+        const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 12),
+          child: Text(
+            AppStrings.or,
+            style: TextStyle(
+              color: AppColors.textSecondary,
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+        const Expanded(child: Divider()),
+      ],
+    );
+  }
+
+  Widget _buildFacebookButton() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        TextButton.icon(
+          onPressed: () => ToastHelper.showToast(context, AppStrings.facebookLoginMock),
+          icon: const Icon(
+            Icons.facebook,
+            color: AppColors.primaryDark,
+            size: 22,
+          ),
+          label: const Text(
+            AppStrings.logInWithFacebook,
+            style: TextStyle(color: AppColors.primaryDark),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSignUpLink() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        const Text(
+          AppStrings.dontHaveAccount,
+          style: TextStyle(color: AppColors.textSecondary),
+        ),
+        TextButton(
+          onPressed: () => Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => SignupScreen(authService: widget.authService),
+            ),
+          ),
+          child: const Text(AppStrings.signUp),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDemoAccounts() {
+    return Column(
+      children: [
+        const Text(
+          AppStrings.demoAccounts,
+          style: TextStyle(
+            fontWeight: FontWeight.w600,
+            fontSize: 13,
+            color: AppColors.textSecondary,
+          ),
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          alignment: WrapAlignment.center,
+          spacing: 8,
+          runSpacing: 8,
+          children: const [
+            _DemoChip(label: 'alice@example.com'),
+            _DemoChip(label: 'marco@example.com'),
+            _DemoChip(label: 'priya@example.com'),
+          ],
+        ),
+      ],
     );
   }
 }

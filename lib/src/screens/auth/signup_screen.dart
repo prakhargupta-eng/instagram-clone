@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:instagram_clone/src/compontes/auth_text_field.dart';
 
 import '../../constants.dart';
 import '../../widgets/insta_logo.dart';
 import '../../services/auth_service.dart';
+import '../../utils/validation.dart';
 
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key, required this.authService});
@@ -56,6 +58,12 @@ class _SignupScreenState extends State<SignupScreen> {
     });
   }
 
+  void _clearServerError() {
+    if (_error != null) {
+      setState(() => _error = null);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
@@ -88,93 +96,44 @@ class _SignupScreenState extends State<SignupScreen> {
                       ),
                     ),
                     const SizedBox(height: 24),
-                    TextFormField(
+                    AuthTextField(
                       controller: _emailController,
+                      hintText: AppStrings.email,
                       keyboardType: TextInputType.emailAddress,
-                      decoration: const InputDecoration(
-                        hintText: AppStrings.email,
-                      ),
-                      autovalidateMode: AutovalidateMode.onUserInteraction,
-                      onChanged: (_) {
-                        if (_error != null) setState(() => _error = null);
-                      },
-                      validator: (v) {
-                        if (v == null || v.trim().isEmpty)
-                          return AppStrings.emailRequired;
-                        final emailRegex = RegExp(
-                          r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$',
-                        );
-                        if (!emailRegex.hasMatch(v.trim()))
-                          return 'Enter a valid email address';
-                        return null;
-                      },
+                      onChanged: (_) => _clearServerError(),
+                      validator: Validators.validateEmail,
                     ),
                     const SizedBox(height: 10),
-                    TextFormField(
+                    AuthTextField(
                       controller: _fullNameController,
-                      decoration: const InputDecoration(
-                        hintText: AppStrings.fullName,
-                      ),
-                      autovalidateMode: AutovalidateMode.onUserInteraction,
-                      onChanged: (_) {
-                        if (_error != null) setState(() => _error = null);
-                      },
-                      validator: (v) {
-                        if (v == null || v.trim().isEmpty)
-                          return AppStrings.fullNameRequired;
-                        if (v.trim().length < 2)
-                          return 'Name must be at least 2 characters';
-                        return null;
-                      },
+                      hintText: AppStrings.fullName,
+                      onChanged: (_) => _clearServerError(),
+                      validator: Validators.validateFullName,
                     ),
                     const SizedBox(height: 10),
-                    TextFormField(
+                    AuthTextField(
                       controller: _usernameController,
-                      decoration: const InputDecoration(
-                        hintText: AppStrings.username,
-                      ),
-                      autovalidateMode: AutovalidateMode.onUserInteraction,
-                      onChanged: (_) {
-                        if (_error != null) setState(() => _error = null);
-                      },
-                      validator: (v) {
-                        if (v == null || v.trim().isEmpty)
-                          return AppStrings.usernameRequired;
-                        if (v.trim().length < 3)
-                          return 'Username must be at least 3 characters';
-                        final usernameRegex = RegExp(r'^[a-zA-Z0-9_\.]+$');
-                        if (!usernameRegex.hasMatch(v.trim())) {
-                          return 'Only letters, numbers, periods, and underscores are allowed';
-                        }
-                        return null;
-                      },
+                      hintText: AppStrings.username,
+                      onChanged: (_) => _clearServerError(),
+                      validator: Validators.validateUsername,
                     ),
                     const SizedBox(height: 10),
-                    TextFormField(
+                    AuthTextField(
                       controller: _passwordController,
+                      hintText: AppStrings.password,
                       obscureText: _obscure,
-                      decoration: InputDecoration(
-                        hintText: AppStrings.password,
-                        suffixIcon: IconButton(
-                          icon: Icon(
-                            _obscure
-                                ? Icons.visibility_off_outlined
-                                : Icons.visibility_outlined,
-                            size: 20,
-                          ),
-                          onPressed: () => setState(() => _obscure = !_obscure),
+                      onChanged: (_) => _clearServerError(),
+                      validator: Validators.validatePassword,
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          _obscure
+                              ? Icons.visibility_off_outlined
+                              : Icons.visibility_outlined,
+                          size: 20,
                         ),
+                        onPressed: () => setState(() => _obscure = !_obscure),
                       ),
-                      autovalidateMode: AutovalidateMode.onUserInteraction,
-                      onChanged: (_) {
-                        if (_error != null) setState(() => _error = null);
-                      },
-                      validator: (v) {
-                        if (v == null || v.isEmpty)
-                          return 'Password is required';
-                        if (v.length < 6) return AppStrings.passwordMinLength;
-                        return null;
-                      },
+                      onFieldSubmitted: (_) => _submit(),
                     ),
                     if (_error != null) ...[
                       const SizedBox(height: 8),
@@ -191,31 +150,9 @@ class _SignupScreenState extends State<SignupScreen> {
                       ),
                     ],
                     const SizedBox(height: 18),
-                    SizedBox(
-                      height: 44,
-                      child: ElevatedButton(
-                        onPressed: _loading ? null : _submit,
-                        child: _loading
-                            ? const SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: AppColors.surface,
-                                ),
-                              )
-                            : const Text(AppStrings.signUp),
-                      ),
-                    ),
+                    _buildSignUpButton(),
                     const SizedBox(height: 20),
-                    const Text(
-                      AppStrings.signupAgreement,
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: AppColors.textSecondary,
-                      ),
-                    ),
+                    _buildAgreementText(),
                     const SizedBox(height: 24),
                   ],
                 ),
@@ -223,6 +160,35 @@ class _SignupScreenState extends State<SignupScreen> {
             ),
           ),
         ),
+      ),
+    );
+  }
+  Widget _buildSignUpButton() {
+    return SizedBox(
+      height: 44,
+      child: ElevatedButton(
+        onPressed: _loading ? null : _submit,
+        child: _loading
+            ? const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: AppColors.surface,
+                ),
+              )
+            : const Text(AppStrings.signUp),
+      ),
+    );
+  }
+
+  Widget _buildAgreementText() {
+    return const Text(
+      AppStrings.signupAgreement,
+      textAlign: TextAlign.center,
+      style: TextStyle(
+        fontSize: 12,
+        color: AppColors.textSecondary,
       ),
     );
   }

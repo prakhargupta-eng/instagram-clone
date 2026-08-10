@@ -171,7 +171,10 @@ class _DetailsScreenState extends State<DetailsScreen> with RouteAware {
 
     try {
       await MusicService.instance.setMuted(_isMuted);
-      await MusicService.instance.playPostMusic(post.music);
+      await MusicService.instance.playPostMusic(
+        post.music,
+        previewUrl: post.musicPreviewUrl,
+      );
       if (mounted) {
         setState(() {
           _isPlaying = MusicService.instance.player.state == PlayerState.playing;
@@ -214,25 +217,6 @@ class _DetailsScreenState extends State<DetailsScreen> with RouteAware {
           'Posts',
           style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.delete_outline, color: AppColors.textPrimary),
-            onPressed: () {
-              widget.feedService.deletePost(activePost.id);
-              if (_postList.length <= 1) {
-                Navigator.of(context).pop();
-              } else {
-                setState(() {
-                  _postList.removeAt(_currentIndex);
-                  if (_currentIndex >= _postList.length) {
-                    _currentIndex = _postList.length - 1;
-                  }
-                  _playMusicForPost(_postList[_currentIndex]);
-                });
-              }
-            },
-          ),
-        ],
       ),
       body: AnimatedBuilder(
         animation: widget.feedService,
@@ -267,6 +251,20 @@ class _DetailsScreenState extends State<DetailsScreen> with RouteAware {
                       onTapMedia: () {
                         if (post.music != null && post.music!.isNotEmpty) {
                           _toggleMute();
+                        }
+                      },
+                      onDelete: () {
+                        widget.feedService.deletePost(post.id);
+                        if (_postList.length <= 1) {
+                          Navigator.of(context).pop();
+                        } else {
+                          setState(() {
+                            _postList.removeAt(_currentIndex);
+                            if (_currentIndex >= _postList.length) {
+                              _currentIndex = _postList.length - 1;
+                            }
+                            _playMusicForPost(_postList[_currentIndex]);
+                          });
                         }
                       },
                     ),
