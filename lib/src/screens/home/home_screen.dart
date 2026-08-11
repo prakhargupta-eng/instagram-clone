@@ -44,6 +44,7 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
   bool _isPlaying = false;
   bool _isMuted = false;
   bool _isRouteActive = true;
+  String? _selectedFeedTag;
 
   GlobalKey _getKeyForPost(String postId) {
     return _cardKeys.putIfAbsent(postId, () => GlobalKey());
@@ -262,16 +263,37 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
       body: AnimatedBuilder(
         animation: widget.feedService,
         builder: (context, _) {
-          return _buildFeed(
-            widget.feedService.forYouFeed(_currentUser),
-            'foryou',
-          );
+          final followingFeed = widget.feedService.followingFeed(_currentUser);
+          if (followingFeed.isNotEmpty) {
+            return _buildFeed(followingFeed, 'following');
+          } else {
+            var publicPosts = widget.feedService.posts.where((p) {
+              final author =
+                  widget.feedService.userById(p.author.id) ?? p.author;
+              return !author.isPrivate;
+            }).toList();
+
+            if (_selectedFeedTag != null) {
+              publicPosts = publicPosts
+                  .where(
+                    (p) => p.caption.toLowerCase().contains(
+                      _selectedFeedTag!.toLowerCase(),
+                    ),
+                  )
+                  .toList();
+            }
+            return _buildFeed(publicPosts, 'public', showSuggestions: true);
+          }
         },
       ),
     );
   }
 
-  Widget _buildFeed(List<Post> feed, String keySuffix) {
+  Widget _buildFeed(
+    List<Post> feed,
+    String keySuffix, {
+    bool showSuggestions = false,
+  }) {
     _currentFeedList = feed;
     final sessionKey = widget.authService.sessionKey;
     final pending = widget.feedService.pendingUploads;
@@ -283,10 +305,30 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
       itemCount: feed.length + 1 + pending.length,
       itemBuilder: (context, index) {
         if (index == 0) {
-          return StoryBar(
-            stories: widget.feedService.storiesFor(_currentUser),
-            currentUser: _currentUser,
-            onAddStory: _openCreateStory,
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              StoryBar(
+                stories: widget.feedService.storiesFor(_currentUser),
+                currentUser: _currentUser,
+                onAddStory: _openCreateStory,
+              ),
+              if (showSuggestions) ...[
+                const Padding(
+                  padding: EdgeInsets.only(left: 16, top: 12, bottom: 4),
+                  child: Text(
+                    'Explore Trending Tags',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                ),
+                _buildSuggestedTagsRow(_suggestedTags),
+                const SizedBox(height: 8),
+              ],
+            ],
           );
         }
 
@@ -403,22 +445,6 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
     );
   }
 
-  void _openReels(String index) {
-    // Open reels screen
-    final posts = widget.feedService.posts.where((p) => p.isVideo).toList();
-    final idx = posts.indexWhere((p) => p.id == index);
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        fullscreenDialog: true,
-        builder: (_) => ReelsScreen(
-          feedService: widget.feedService,
-          currentUser: _currentUser,
-          initialIndex: idx != -1 ? idx : 0,
-        ),
-      ),
-    );
-  }
-
   void _openCreateStory() {
     Navigator.of(context).push(
       MaterialPageRoute(
@@ -427,6 +453,72 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
           currentUser: _currentUser,
           isStory: true,
         ),
+      ),
+    );
+  }
+
+  List<String> get _suggestedTags {
+    final frequency = <String, int>{};
+    for (final post in widget.feedService.posts) {
+      final caption = post.caption;
+      final RegExp regExp = RegExp(r'#\w+');
+      final matches = regExp.allMatches(caption);
+      for (final match in matches) {
+        final tag = match.group(0)!;
+        frequency[tag] = (frequency[tag] ?? 0) + 1;
+      }
+    }
+    final sortedTags = frequency.keys.toList()
+      ..sort((a, b) => frequency[b]!.compareTo(frequency[a]!));
+    return sortedTags.take(5).toList();
+  }
+
+  Widget _buildSuggestedTagsRow(List<String> topTags) {
+    return Container(
+      height: 48,
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        itemCount: topTags.length,
+        itemBuilder: (context, index) {
+          final tag = topTags[index];
+          final isSelected = _selectedFeedTag == tag;
+          return Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: FilterChip(
+              label: Text(
+                tag,
+                style: TextStyle(
+                  color: isSelected ? Colors.white : AppColors.textPrimary,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 13,
+                ),
+              ),
+              selected: isSelected,
+              onSelected: (selected) {
+                setState(() {
+                  if (selected) {
+                    _selectedFeedTag = tag;
+                  } else {
+                    _selectedFeedTag = null;
+                  }
+                });
+              },
+              backgroundColor: AppColors.surface,
+              selectedColor: Colors.blue,
+              checkmarkColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(18),
+                side: BorderSide(
+                  color: isSelected ? Colors.transparent : AppColors.border,
+                  width: 0.5,
+                ),
+              ),
+            ),
+          );
+        },
       ),
     );
   }

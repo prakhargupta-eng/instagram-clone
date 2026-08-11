@@ -37,13 +37,24 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   final _formKey = GlobalKey<FormState>();
 
   Future<void> _pickAvatarFromGallery() async {
-    final picked = await _imagePicker.pickImage(
-      source: ImageSource.gallery,
-      maxWidth: 512,
-      imageQuality: 85,
-    );
-    if (picked == null || !mounted) return;
-    setState(() => _avatarUrl = picked.path);
+    try {
+      final picked = await _imagePicker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 512,
+        imageQuality: 85,
+      );
+      if (picked == null || !mounted) return;
+      setState(() => _avatarUrl = picked.path);
+    } catch (e) {
+      debugPrint('Error picking avatar: $e');
+      if (mounted) {
+        ToastHelper.showToast(
+          context,
+          'Failed to pick avatar image: ${e.toString()}',
+          isError: true,
+        );
+      }
+    }
   }
 
   @override

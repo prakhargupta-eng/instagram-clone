@@ -12,6 +12,7 @@ import 'compontes/Stat.dart';
 import 'compontes/EmptyTab.dart';
 import 'compontes/postTitle.dart';
 import 'package:instagram_clone/src/compontes/ToastHelper.dart';
+import '../../utils/number_helper.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({
@@ -38,8 +39,18 @@ class _ProfileScreenState extends State<ProfileScreen>
 
   FeedService get feedService => widget.feedService;
 
-  AppUser get _displayUser => widget.authService?.currentUser ?? widget.user;
-  bool get _isCurrentUser => widget.authService != null;
+  AppUser get _displayUser {
+    final currentUser = widget.authService?.currentUser;
+    if (currentUser != null && currentUser.id == widget.user.id) {
+      return currentUser;
+    }
+    return widget.user;
+  }
+
+  bool get _isCurrentUser {
+    final currentUserId = widget.authService?.currentUser?.id;
+    return currentUserId != null && currentUserId == widget.user.id;
+  }
 
   @override
   void dispose() {
@@ -77,17 +88,14 @@ class _ProfileScreenState extends State<ProfileScreen>
           },
         ),
         centerTitle: false,
-        actions: [
-          if (_isCurrentUser)
-            IconButton(
-              icon: const Icon(Icons.add_box_outlined),
-              onPressed: () {},
-            ),
-          IconButton(
-            icon: const Icon(Icons.menu),
-            onPressed: () => _showMenuSheet(context),
-          ),
-        ],
+        actions: _isCurrentUser
+            ? [
+                IconButton(
+                  icon: const Icon(Icons.menu),
+                  onPressed: () => _showMenuSheet(context),
+                ),
+              ]
+            : null,
       ),
       body: AnimatedBuilder(
         animation: listenable,
@@ -116,13 +124,13 @@ class _ProfileScreenState extends State<ProfileScreen>
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceAround,
                       children: [
-                        Stat(label: '${posts.length}', value: 'Posts'),
+                        Stat(label: formatCount(posts.length), value: 'Posts'),
                         Stat(
-                          label: '${liveUser.followers}',
+                          label: formatCount(liveUser.followers),
                           value: 'Followers',
                         ),
                         Stat(
-                          label: '${liveUser.following}',
+                          label: formatCount(liveUser.following),
                           value: 'Following',
                         ),
                       ],
@@ -340,7 +348,12 @@ class _ProfileScreenState extends State<ProfileScreen>
     final current = widget.authService?.currentUser;
     if (current == null) return;
     feedService.toggleFollow(current.id, _displayUser.id);
-    ToastHelper.showToast(context, "Following ${_displayUser.username}");
+    final isFollowingNow = feedService.isFollowing(current.id, _displayUser.id);
+    if (isFollowingNow) {
+      ToastHelper.showToast(context, "Following ${_displayUser.username}");
+    } else {
+      ToastHelper.showToast(context, "Unfollowed ${_displayUser.username}");
+    }
   }
 
   void _showMenuSheet(BuildContext context) {

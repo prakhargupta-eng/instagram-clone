@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:photo_manager/photo_manager.dart';
 import 'package:video_player/video_player.dart' as video;
@@ -16,6 +17,7 @@ import '../../widgets/media_image.dart';
 import 'post_editor_screen.dart';
 import 'location_picker_sheet.dart';
 import 'music_picker_sheet.dart';
+import '../../compontes/ToastHelper.dart';
 
 class _MediaSelection {
   const _MediaSelection({
@@ -92,6 +94,21 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
   void initState() {
     super.initState();
     _loadGallery();
+    _retrieveLostData();
+  }
+
+  Future<void> _retrieveLostData() async {
+    try {
+      final response = await _imagePicker.retrieveLostData();
+      if (response.isEmpty) return;
+      final file = response.file;
+      if (file != null && mounted) {
+        final isVideo = response.type == RetrieveType.video;
+        await _openEditor(url: file.path, isVideo: isVideo);
+      }
+    } catch (e) {
+      debugPrint('Error retrieving lost data: $e');
+    }
   }
 
   @override
@@ -157,7 +174,8 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
       if (match != null) {
         thumb = match.$2;
       } else {
-        thumb = 'https://picsum.photos/seed/vid_${DateTime.now().millisecondsSinceEpoch}/600/600';
+        thumb =
+            'https://picsum.photos/seed/vid_${DateTime.now().millisecondsSinceEpoch}/600/600';
       }
     }
 
@@ -171,22 +189,56 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
   }
 
   Future<void> _pickImage(ImageSource source) async {
-    final picked = await _imagePicker.pickImage(
-      source: source,
-      maxWidth: 2048,
-      imageQuality: 90,
-    );
-    if (picked == null || !mounted) return;
-    await _openEditor(url: picked.path, isVideo: false);
+    try {
+      final picked = await _imagePicker.pickImage(
+        source: source,
+        maxWidth: 2048,
+        imageQuality: 90,
+      );
+      if (picked == null || !mounted) return;
+      await _openEditor(url: picked.path, isVideo: false);
+    } catch (e) {
+      debugPrint('Error picking image: $e');
+      if (mounted) {
+        String errMsg = 'Error picking image';
+        if (e is PlatformException) {
+          if (e.code == 'camera_access_denied') {
+            errMsg = 'Camera permission is required to take photos.';
+          } else {
+            errMsg = e.message ?? e.toString();
+          }
+        } else {
+          errMsg = e.toString();
+        }
+        ToastHelper.showToast(context, errMsg, isError: true);
+      }
+    }
   }
 
   Future<void> _pickVideo(ImageSource source) async {
-    final picked = await _imagePicker.pickVideo(
-      source: source,
-      maxDuration: const Duration(seconds: 60),
-    );
-    if (picked == null || !mounted) return;
-    await _openEditor(url: picked.path, isVideo: true);
+    try {
+      final picked = await _imagePicker.pickVideo(
+        source: source,
+        maxDuration: const Duration(seconds: 60),
+      );
+      if (picked == null || !mounted) return;
+      await _openEditor(url: picked.path, isVideo: true);
+    } catch (e) {
+      debugPrint('Error picking video: $e');
+      if (mounted) {
+        String errMsg = 'Error picking video';
+        if (e is PlatformException) {
+          if (e.code == 'camera_access_denied') {
+            errMsg = 'Camera permission is required to record video.';
+          } else {
+            errMsg = e.message ?? e.toString();
+          }
+        } else {
+          errMsg = e.toString();
+        }
+        ToastHelper.showToast(context, errMsg, isError: true);
+      }
+    }
   }
 
   Future<void> _pickFromGalleryAsset(AssetEntity asset) async {
@@ -261,59 +313,59 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
       onTap: () => FocusScope.of(context).unfocus(),
       child: Scaffold(
         backgroundColor: AppColors.surface,
-      appBar: AppBar(
-        backgroundColor: AppColors.surface,
-        foregroundColor: AppColors.textPrimary,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        centerTitle: true,
-        title: Text(
-          _selected == null ? 'New Post' : 'New Post',
-          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-        ),
-        leading: _selected == null
-            ? IconButton(
-                icon: const Icon(Icons.close, size: 26),
-                onPressed: () => Navigator.of(context).maybePop(),
-              )
-            : IconButton(
-                icon: const Icon(
-                  Icons.arrow_back_ios_new,
-                  color: AppColors.textPrimary,
-                  size: 20,
+        appBar: AppBar(
+          backgroundColor: AppColors.surface,
+          foregroundColor: AppColors.textPrimary,
+          elevation: 0,
+          scrolledUnderElevation: 0,
+          centerTitle: true,
+          title: Text(
+            _selected == null ? 'New Post' : 'New Post',
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+          ),
+          leading: _selected == null
+              ? IconButton(
+                  icon: const Icon(Icons.close, size: 26),
+                  onPressed: () => Navigator.of(context).maybePop(),
+                )
+              : IconButton(
+                  icon: const Icon(
+                    Icons.arrow_back_ios_new,
+                    color: AppColors.textPrimary,
+                    size: 20,
+                  ),
+                  onPressed: () => setState(() => _selected = null),
                 ),
-                onPressed: () => setState(() => _selected = null),
+          actions: [
+            if (_selected != null)
+              TextButton(
+                onPressed: _sharing ? null : _share,
+                child: _sharing
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: AppColors.primary,
+                        ),
+                      )
+                    : const Text(
+                        'Share',
+                        style: TextStyle(
+                          color: AppColors.primary,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 16,
+                        ),
+                      ),
               ),
-        actions: [
-          if (_selected != null)
-            TextButton(
-              onPressed: _sharing ? null : _share,
-              child: _sharing
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: AppColors.primary,
-                      ),
-                    )
-                  : const Text(
-                      'Share',
-                      style: TextStyle(
-                        color: AppColors.primary,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 16,
-                      ),
-                    ),
-            ),
-          const SizedBox(width: 4),
-        ],
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(0.5),
-          child: Container(color: AppColors.border, height: 0.5),
+            const SizedBox(width: 4),
+          ],
+          bottom: PreferredSize(
+            preferredSize: const Size.fromHeight(0.5),
+            child: Container(color: AppColors.border, height: 0.5),
+          ),
         ),
-      ),
-      body: _selected == null ? _buildPicker() : _buildCaption(),
+        body: _selected == null ? _buildPicker() : _buildCaption(),
       ),
     );
   }
@@ -464,7 +516,10 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                           child: Stack(
                             fit: StackFit.expand,
                             children: [
-                              CachedNetworkImage(imageUrl: thumbnail, fit: BoxFit.cover),
+                              CachedNetworkImage(
+                                imageUrl: thumbnail,
+                                fit: BoxFit.cover,
+                              ),
                               Container(
                                 decoration: const BoxDecoration(
                                   gradient: LinearGradient(
@@ -569,7 +624,10 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                             ),
                           ],
                         )
-                      : MediaImage(path: selection.thumbnail, fit: BoxFit.cover),
+                      : MediaImage(
+                          path: selection.thumbnail,
+                          fit: BoxFit.cover,
+                        ),
                 ),
               ),
             ],

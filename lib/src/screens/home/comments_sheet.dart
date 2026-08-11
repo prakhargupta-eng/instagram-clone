@@ -27,16 +27,32 @@ class CommentsSheet extends StatefulWidget {
 
 class _CommentsSheetState extends State<CommentsSheet> {
   late final TextEditingController _controller = TextEditingController();
+  bool _hasText = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller.addListener(_handleTextChange);
+  }
+
+  void _handleTextChange() {
+    final hasText = _controller.text.trim().isNotEmpty;
+    if (hasText != _hasText) {
+      setState(() {
+        _hasText = hasText;
+      });
+    }
+  }
 
   @override
   void dispose() {
+    _controller.removeListener(_handleTextChange);
     _controller.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final post = widget.feedService.getPost(widget.post.id);
     final dividerColor = widget.isDark ? Colors.white12 : AppColors.border;
     final textColor = widget.isDark ? Colors.white : AppColors.textPrimary;
     final subTextColor = widget.isDark ? Colors.white54 : AppColors.textSecondary;
@@ -65,20 +81,28 @@ class _CommentsSheetState extends State<CommentsSheet> {
           ),
           Divider(height: 16, color: dividerColor),
           Flexible(
-            child: post.comments.isEmpty
-                ? Padding(
+            child: ListenableBuilder(
+              listenable: widget.feedService,
+              builder: (context, _) {
+                final post = widget.feedService.getPost(widget.post.id);
+                if (post.comments.isEmpty) {
+                  return Padding(
                     padding: const EdgeInsets.all(32),
                     child: Text(
                       AppStrings.noCommentsYet,
                       style: TextStyle(color: subTextColor),
                     ),
-                  )
-                : ListView.builder(
-                    shrinkWrap: true,
-                    itemCount: post.comments.length,
-                    itemBuilder: (context, index) {
-                      final comment = post.comments[index];
-                      return Padding(
+                  );
+                }
+                return ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: post.comments.length,
+                  itemBuilder: (context, index) {
+                    final comment = post.comments[index];
+                    return SlideFadeTransitionItem(
+                      index: index,
+                      createdAt: comment.createdAt,
+                      child: Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -86,31 +110,34 @@ class _CommentsSheetState extends State<CommentsSheet> {
                             Avatar(url: comment.author.avatarUrl, radius: 16),
                             const SizedBox(width: 10),
                             Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      comment.author.username,
-                                      style: TextStyle(fontWeight: FontWeight.w600, color: textColor, fontSize: 13),
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      comment.text,
-                                      style: TextStyle(color: textColor, fontSize: 13),
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      DateFormat('MMM d, h:mm a').format(comment.createdAt),
-                                      style: TextStyle(color: subTextColor, fontSize: 11),
-                                    ),
-                                  ],
-                                ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    comment.author.username,
+                                    style: TextStyle(fontWeight: FontWeight.w600, color: textColor, fontSize: 13),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    comment.text,
+                                    style: TextStyle(color: textColor, fontSize: 13),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    DateFormat('MMM d, h:mm a').format(comment.createdAt),
+                                    style: TextStyle(color: subTextColor, fontSize: 11),
+                                  ),
+                                ],
                               ),
+                            ),
                           ],
                         ),
-                      );
-                    },
-                  ),
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
           ),
           Divider(height: 1, color: dividerColor),
           Padding(
@@ -143,12 +170,21 @@ class _CommentsSheetState extends State<CommentsSheet> {
                       ),
                     ),
                     textInputAction: TextInputAction.send,
-                    onSubmitted: _submit,
+                    onSubmitted: _hasText ? _submit : null,
                   ),
                 ),
-                IconButton(
-                  icon: const Icon(Icons.send, color: AppColors.primary),
-                  onPressed: () => _submit(_controller.text),
+                AnimatedOpacity(
+                  duration: const Duration(milliseconds: 200),
+                  opacity: _hasText ? 1.0 : 0.4,
+                  child: AnimatedScale(
+                    duration: const Duration(milliseconds: 250),
+                    scale: _hasText ? 1.0 : 0.85,
+                    curve: Curves.easeOutBack,
+                    child: IconButton(
+                      icon: const Icon(Icons.send, color: AppColors.primary),
+                      onPressed: _hasText ? () => _submit(_controller.text) : null,
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -160,9 +196,82 @@ class _CommentsSheetState extends State<CommentsSheet> {
   }
 
   void _submit(String text) {
+    if (text.trim().isEmpty) return;
     widget.feedService.addComment(widget.post.id, widget.currentUser, text);
     _controller.clear();
     FocusScope.of(context).unfocus();
+  }
+}
+
+class SlideFadeTransitionItem extends StatefulWidget {
+  const SlideFadeTransitionItem({
+    super.key,
+    required this.child,
+    required this.index,
+    required this.createdAt,
+  });
+
+  final Widget child;
+  final int index;
+  final DateTime createdAt;
+
+  @override
+  State<SlideFadeTransitionItem> createState() => _SlideFadeTransitionItemState();
+}
+
+class _SlideFadeTransitionItemState extends State<SlideFadeTransitionItem>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<double> _opacity;
+  late final Animation<Offset> _slide;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 350),
+    );
+
+    _opacity = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeOut),
+    );
+
+    _slide = Tween<Offset>(
+      begin: const Offset(0.0, 0.2),
+      end: Offset.zero,
+    ).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeOutQuad),
+    );
+
+    final isNew = DateTime.now().difference(widget.createdAt).inSeconds < 2;
+    if (isNew) {
+      _controller.forward();
+    } else {
+      final delay = Duration(milliseconds: (widget.index < 6 ? widget.index : 6) * 50);
+      Future.delayed(delay, () {
+        if (mounted) {
+          _controller.forward();
+        }
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: _opacity,
+      child: SlideTransition(
+        position: _slide,
+        child: widget.child,
+      ),
+    );
   }
 }
 
