@@ -1,16 +1,20 @@
-import 'dart:io';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import '../adaptive_colors.dart';
 import 'package:intl/intl.dart' hide TextDirection;
 import 'package:video_player/video_player.dart' as video;
 
 import '../constants.dart';
 import '../models/post.dart';
 import '../models/user.dart';
-import '../services/local_post_store.dart';
+import '../services/video_cache_service.dart';
 import 'avatar.dart';
 import 'media_image.dart';
+import 'shader_filter_widget.dart';
 import 'package:instagram_clone/src/compontes/ToastHelper.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:get_thumbnail_video/video_thumbnail.dart';
+import 'package:get_thumbnail_video/index.dart';
 
 class PostCard extends StatefulWidget {
   const PostCard({
@@ -55,6 +59,8 @@ class _PostCardState extends State<PostCard>
   video.VideoPlayerController? _videoController;
   bool _videoInitialized = false;
   bool _isCaptionExpanded = false;
+  String? _dynamicThumbnailPath;
+  String? _videoInitId;
 
   @override
   void initState() {
@@ -89,38 +95,89 @@ class _PostCardState extends State<PostCard>
 
     if (widget.post.isVideo) {
       _initVideo();
+      if (widget.post.imageUrl.isEmpty ||
+          widget.post.imageUrl.contains('picsum.photos/seed/vdefault') ||
+          widget.post.imageUrl.contains('picsum.photos/seed/vid')) {
+        _generateDynamicThumbnail();
+      }
     }
   }
 
-  void _initVideo() {
-    final path = widget.post.videoUrl;
-    _videoController = LocalPostStore.isLocalPath(path)
-        ? video.VideoPlayerController.file(File(path))
-        : video.VideoPlayerController.networkUrl(Uri.parse(path));
-
-    _videoController!
-        .initialize()
-        .then((_) {
-          if (!mounted) return;
-          _videoController!.setLooping(true);
-          _videoController!.setVolume(widget.isMuted ? 0.0 : 1.0);
-          setState(() {
-            _videoInitialized = true;
-          });
-          if (widget.isActive) {
-            _videoController!.play();
-          }
+  void _generateDynamicThumbnail() {
+    final videoPath = widget.post.videoUrl;
+    if (videoPath.isEmpty) return;
+    getTemporaryDirectory()
+        .then((tempDir) {
+          VideoThumbnail.thumbnailFile(
+                video: videoPath,
+                thumbnailPath: tempDir.path,
+                imageFormat: ImageFormat.JPEG,
+                maxWidth: 400,
+                quality: 60,
+              )
+              .then((xFile) {
+                if (mounted) {
+                  setState(() {
+                    _dynamicThumbnailPath = xFile.path;
+                  });
+                }
+              })
+              .catchError((e) {
+                debugPrint('PostCard generate dynamic thumbnail error: $e');
+              });
         })
         .catchError((e) {
-          debugPrint('PostCard video init error: $e');
+          debugPrint('PostCard get temp dir error: $e');
         });
+  }
+
+  void _initVideo() async {
+    final path = widget.post.videoUrl;
+    if (path.isEmpty) return;
+
+    final String currentInitId = widget.post.id;
+    _videoInitId = currentInitId;
+
+    try {
+      final file = await VideoCacheService.instance.getFile(path);
+      if (_videoInitId != currentInitId || !mounted) return;
+
+      final controller = video.VideoPlayerController.file(file);
+      _videoController = controller;
+
+      await controller.initialize();
+      if (_videoInitId != currentInitId || !mounted) {
+        controller.dispose();
+        if (_videoController == controller) {
+          _videoController = null;
+        }
+        return;
+      }
+
+      controller.setLooping(true);
+      controller.setVolume(widget.isMuted ? 0.0 : 1.0);
+      setState(() {
+        _videoInitialized = true;
+      });
+      if (widget.isActive) {
+        controller.play();
+      }
+    } catch (e) {
+      debugPrint('PostCard video init error: $e');
+    }
   }
 
   @override
   void didUpdateWidget(PostCard oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.post.isVideo) {
-      if (_videoController == null) {
+      if (widget.post.videoUrl != oldWidget.post.videoUrl) {
+        _videoInitId = null;
+        _videoController?.dispose();
+        _videoController = null;
+        _videoInitialized = false;
+        _initVideo();
+      } else if (_videoController == null) {
         _initVideo();
       } else {
         if (widget.isMuted != oldWidget.isMuted) {
@@ -133,6 +190,7 @@ class _PostCardState extends State<PostCard>
         }
       }
     } else {
+      _videoInitId = null;
       if (_videoController != null) {
         _videoController!.dispose();
         _videoController = null;
@@ -143,6 +201,7 @@ class _PostCardState extends State<PostCard>
 
   @override
   void dispose() {
+    _videoInitId = null;
     _heartAnimController.dispose();
     _videoController?.dispose();
     super.dispose();
@@ -195,9 +254,9 @@ class _PostCardState extends State<PostCard>
               children: [
                 Text(
                   widget.author.username,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontWeight: FontWeight.w600,
-                    color: AppColors.textPrimary,
+                    color: context.textPrimaryColor,
                     fontSize: 14,
                   ),
                 ),
@@ -205,9 +264,9 @@ class _PostCardState extends State<PostCard>
                     widget.post.location!.isNotEmpty)
                   Text(
                     widget.post.location!,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 12,
-                      color: AppColors.textSecondary,
+                      color: context.textSecondaryColor,
                     ),
                   ),
                 if (widget.post.music != null && widget.post.music!.isNotEmpty)
@@ -225,9 +284,9 @@ class _PostCardState extends State<PostCard>
                                 : widget.post.music!,
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 11,
-                              color: AppColors.textSecondary,
+                              color: context.textSecondaryColor,
                             ),
                           ),
                         ),
@@ -239,10 +298,10 @@ class _PostCardState extends State<PostCard>
           ),
           if (widget.post.author.id == widget.currentUserId)
             IconButton(
-              icon: const Icon(
+              icon: Icon(
                 Icons.more_horiz,
                 size: 22,
-                color: AppColors.textPrimary,
+                color: context.textPrimaryColor,
               ),
               onPressed: () => _showPostOptionsBottomSheet(context),
             ),
@@ -272,35 +331,56 @@ class _PostCardState extends State<PostCard>
       child: Stack(
         alignment: Alignment.center,
         children: [
-          AspectRatio(
-            aspectRatio: 1,
-            child:
-                widget.post.isVideo &&
-                    _videoInitialized &&
-                    _videoController != null
-                ? ClipRect(
-                    child: FittedBox(
-                      fit: BoxFit.cover,
-                      clipBehavior: Clip.hardEdge,
-                      child: SizedBox(
-                        width: _videoController!.value.size.width,
-                        height: _videoController!.value.size.height,
-                        child: video.VideoPlayer(_videoController!),
+          ShaderFilterWidget(
+            enabled: widget.post.filterIndex == 8,
+            child: ColorFiltered(
+              colorFilter: AppFilters.getCombinedFilter(
+                widget.post.filterIndex,
+                widget.post.brightness,
+                widget.post.contrast,
+                widget.post.saturation,
+              ),
+              child: AspectRatio(
+                aspectRatio: 1,
+                child:
+                    widget.post.isVideo &&
+                        _videoInitialized &&
+                        _videoController != null
+                    ? ClipRect(
+                        child: FittedBox(
+                          fit: BoxFit.cover,
+                          clipBehavior: Clip.hardEdge,
+                          child: SizedBox(
+                            width: _videoController!.value.size.width,
+                            height: _videoController!.value.size.height,
+                            child: video.VideoPlayer(_videoController!),
+                          ),
+                        ),
+                      )
+                    : Hero(
+                        tag: 'post_image_${widget.post.id}',
+                        child: MediaImage(
+                          path:
+                              (_dynamicThumbnailPath != null &&
+                                  _dynamicThumbnailPath!.isNotEmpty)
+                              ? _dynamicThumbnailPath!
+                              : widget.post.imageUrl,
+                          videoUrl: widget.post.isVideo
+                              ? widget.post.videoUrl
+                              : null,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, _, _) => Container(
+                            color: context.borderColor,
+                            child: Icon(
+                              Icons.broken_image_outlined,
+                              color: context.textSecondaryColor,
+                              size: 40,
+                            ),
+                          ),
+                        ),
                       ),
-                    ),
-                  )
-                : MediaImage(
-                    path: widget.post.imageUrl,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, _, _) => Container(
-                      color: AppColors.border,
-                      child: const Icon(
-                        Icons.broken_image_outlined,
-                        color: AppColors.textSecondary,
-                        size: 40,
-                      ),
-                    ),
-                  ),
+              ),
+            ),
           ),
           if (widget.post.isVideo && !_videoInitialized)
             const Positioned.fill(
@@ -364,11 +444,11 @@ class _PostCardState extends State<PostCard>
                 'lib/src/asserts/Heart.png',
                 width: 26,
                 height: 26,
-                color: isLiked ? AppColors.error : AppColors.textPrimary,
+                color: isLiked ? AppColors.error : context.textPrimaryColor,
                 colorBlendMode: BlendMode.srcIn,
                 errorBuilder: (_, _, _) => Icon(
                   isLiked ? Icons.favorite : Icons.favorite_border,
-                  color: isLiked ? AppColors.error : AppColors.textPrimary,
+                  color: isLiked ? AppColors.error : context.textPrimaryColor,
                   size: 26,
                 ),
               ),
@@ -384,11 +464,11 @@ class _PostCardState extends State<PostCard>
                 'lib/src/asserts/comments.png',
                 width: 24,
                 height: 24,
-                color: AppColors.textPrimary,
+                color: context.textPrimaryColor,
                 colorBlendMode: BlendMode.srcIn,
-                errorBuilder: (_, _, _) => const Icon(
+                errorBuilder: (_, _, _) => Icon(
                   Icons.chat_bubble_outline,
-                  color: AppColors.textPrimary,
+                  color: context.textPrimaryColor,
                   size: 24,
                 ),
               ),
@@ -406,11 +486,11 @@ class _PostCardState extends State<PostCard>
                 'lib/src/asserts/forword.png',
                 width: 24,
                 height: 24,
-                color: AppColors.textPrimary,
+                color: context.textPrimaryColor,
                 colorBlendMode: BlendMode.srcIn,
-                errorBuilder: (_, _, _) => const Icon(
+                errorBuilder: (_, _, _) => Icon(
                   Icons.send_outlined,
-                  color: AppColors.textPrimary,
+                  color: context.textPrimaryColor,
                   size: 24,
                 ),
               ),
@@ -423,20 +503,20 @@ class _PostCardState extends State<PostCard>
             child: Padding(
               padding: const EdgeInsets.all(6),
               child: widget.isBookmarked
-                  ? const Icon(
+                  ? Icon(
                       Icons.bookmark,
-                      color: AppColors.textPrimary,
+                      color: context.textPrimaryColor,
                       size: 24,
                     )
                   : Image.asset(
                       'lib/src/asserts/bookmark.png',
                       width: 22,
                       height: 22,
-                      color: AppColors.textPrimary,
+                      color: context.textPrimaryColor,
                       colorBlendMode: BlendMode.srcIn,
-                      errorBuilder: (_, _, _) => const Icon(
+                      errorBuilder: (_, _, _) => Icon(
                         Icons.bookmark_border,
-                        color: AppColors.textPrimary,
+                        color: context.textPrimaryColor,
                         size: 24,
                       ),
                     ),
@@ -452,9 +532,9 @@ class _PostCardState extends State<PostCard>
       padding: const EdgeInsets.fromLTRB(12, 2, 12, 0),
       child: Text(
         '${_formatCount(widget.post.likes)} ${AppStrings.likes}',
-        style: const TextStyle(
+        style: TextStyle(
           fontWeight: FontWeight.w700,
-          color: AppColors.textPrimary,
+          color: context.textPrimaryColor,
           fontSize: 13.5,
         ),
       ),
@@ -491,8 +571,8 @@ class _PostCardState extends State<PostCard>
       padding: const EdgeInsets.fromLTRB(12, 3, 12, 0),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          const textStyle = TextStyle(
-            color: AppColors.textPrimary,
+          TextStyle textStyle = TextStyle(
+            color: context.textPrimaryColor,
             fontSize: 13.5,
             height: 1.35,
           );
@@ -528,8 +608,8 @@ class _PostCardState extends State<PostCard>
                   if (showMoreButton)
                     TextSpan(
                       text: _isCaptionExpanded ? ' less' : ' more',
-                      style: const TextStyle(
-                        color: AppColors.textSecondary,
+                      style: TextStyle(
+                        color: context.textSecondaryColor,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -550,7 +630,7 @@ class _PostCardState extends State<PostCard>
         onTap: widget.onComment,
         child: Text(
           'View all ${widget.post.comments.length} comments',
-          style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
+          style: TextStyle(color: context.textSecondaryColor, fontSize: 13),
         ),
       ),
     );
@@ -561,7 +641,7 @@ class _PostCardState extends State<PostCard>
       padding: const EdgeInsets.fromLTRB(12, 4, 12, 0),
       child: Text(
         _relativeTime(widget.post.createdAt),
-        style: const TextStyle(color: AppColors.textSecondary, fontSize: 10.5),
+        style: TextStyle(color: context.textSecondaryColor, fontSize: 10.5),
       ),
     );
   }
@@ -589,7 +669,7 @@ class _PostCardState extends State<PostCard>
   void _showPostOptionsBottomSheet(BuildContext context) {
     showModalBottomSheet(
       context: context,
-      backgroundColor: AppColors.surface,
+      backgroundColor: context.surfaceColor,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
       ),
@@ -603,7 +683,7 @@ class _PostCardState extends State<PostCard>
                 width: 36,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: AppColors.border,
+                  color: context.borderColor,
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -635,7 +715,7 @@ class _PostCardState extends State<PostCard>
       context: context,
       builder: (context) {
         return Dialog(
-          backgroundColor: AppColors.surface,
+          backgroundColor: context.surfaceColor,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(14),
           ),
@@ -649,32 +729,28 @@ class _PostCardState extends State<PostCard>
                 ),
                 child: Column(
                   children: [
-                    const Text(
+                    Text(
                       'Delete Post?',
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w600,
-                        color: AppColors.textPrimary,
+                        color: context.textPrimaryColor,
                       ),
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 8),
-                    const Text(
+                    Text(
                       'Are you sure you want to delete this post? This action cannot be undone.',
                       style: TextStyle(
                         fontSize: 13,
-                        color: AppColors.textSecondary,
+                        color: context.textSecondaryColor,
                       ),
                       textAlign: TextAlign.center,
                     ),
                   ],
                 ),
               ),
-              const Divider(
-                height: 0.5,
-                thickness: 0.5,
-                color: AppColors.border,
-              ),
+              Divider(height: 0.5, thickness: 0.5, color: context.borderColor),
               Row(
                 children: [
                   Expanded(
@@ -683,7 +759,7 @@ class _PostCardState extends State<PostCard>
                       child: TextButton(
                         onPressed: () => Navigator.of(context).pop(),
                         style: TextButton.styleFrom(
-                          foregroundColor: AppColors.textPrimary,
+                          foregroundColor: context.textPrimaryColor,
                           padding: EdgeInsets.zero,
                         ),
                         child: const Text(
@@ -696,7 +772,7 @@ class _PostCardState extends State<PostCard>
                       ),
                     ),
                   ),
-                  Container(width: 0.5, height: 48, color: AppColors.border),
+                  Container(width: 0.5, height: 48, color: context.borderColor),
                   Expanded(
                     child: SizedBox(
                       height: 48,
@@ -781,11 +857,11 @@ class _MusicVisualizerState extends State<MusicVisualizer>
         children: List.generate(
           3,
           (index) => Container(
-            margin: const EdgeInsets.symmetric(horizontal: 0.8),
+            margin: EdgeInsets.symmetric(horizontal: 0.8),
             width: 1.8,
             height: 4,
             decoration: BoxDecoration(
-              color: AppColors.textSecondary,
+              color: context.textSecondaryColor,
               borderRadius: BorderRadius.circular(0.5),
             ),
           ),

@@ -1,9 +1,11 @@
 import 'dart:math';
 
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:skeletonizer/skeletonizer.dart';
+import '../../adaptive_colors.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 
+import '../../app.dart';
 import '../../constants.dart';
 import '../../models/post.dart';
 import '../../models/user.dart';
@@ -11,6 +13,7 @@ import '../../services/auth_service.dart';
 import '../../services/feed_service.dart';
 import '../profile/profile_screen.dart';
 import '../reels/reels_screen.dart';
+import '../../widgets/media_image.dart';
 
 // ── Category chip data ────────────────────────────────────────────────────────
 
@@ -113,7 +116,7 @@ class _SearchScreenState extends State<SearchScreen>
     final showTabs = _query.isNotEmpty || _focused;
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: context.backgroundColor,
       body: SafeArea(
         child: Column(
           children: [
@@ -131,10 +134,14 @@ class _SearchScreenState extends State<SearchScreen>
               child: AnimatedBuilder(
                 animation: widget.feedService,
                 builder: (context, _) {
-                  if (showTabs) {
-                    return _buildTabbedResults();
-                  }
-                  return _buildExploreGrid();
+                  final isLoading = widget.feedService.isLoading;
+                  return Skeletonizer(
+                    enabled: isLoading,
+                    enableSwitchAnimation: true,
+                    child: showTabs
+                        ? _buildTabbedResults()
+                        : _buildExploreGrid(),
+                  );
                 },
               ),
             ),
@@ -147,8 +154,9 @@ class _SearchScreenState extends State<SearchScreen>
   // ── Search bar ────────────────────────────────────────────────────────────
 
   Widget _buildSearchBar() {
+    final isDarkTheme = isDark(context);
     return Container(
-      color: Colors.white,
+      color: context.backgroundColor,
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
       child: Row(
         children: [
@@ -167,21 +175,18 @@ class _SearchScreenState extends State<SearchScreen>
                 },
                 onSubmitted: (v) => _addRecentSearch(v),
                 textAlignVertical: TextAlignVertical.center,
-                style: const TextStyle(
-                  fontSize: 15,
-                  color: AppColors.textPrimary,
-                ),
+                style: TextStyle(fontSize: 15, color: context.textPrimaryColor),
                 decoration: InputDecoration(
                   hintText: 'Search',
-                  hintStyle: const TextStyle(
-                    color: AppColors.textSecondary,
+                  hintStyle: TextStyle(
+                    color: context.textSecondaryColor,
                     fontSize: 15,
                   ),
-                  prefixIcon: const Padding(
-                    padding: EdgeInsets.only(left: 10, right: 6),
+                  prefixIcon: Padding(
+                    padding: const EdgeInsets.only(left: 10, right: 6),
                     child: Icon(
                       Icons.search,
-                      color: AppColors.textSecondary,
+                      color: context.textSecondaryColor,
                       size: 20,
                     ),
                   ),
@@ -189,11 +194,11 @@ class _SearchScreenState extends State<SearchScreen>
                   suffixIcon: _query.isNotEmpty
                       ? GestureDetector(
                           onTap: _clearSearch,
-                          child: const Padding(
-                            padding: EdgeInsets.only(right: 8),
+                          child: Padding(
+                            padding: const EdgeInsets.only(right: 8),
                             child: Icon(
                               Icons.cancel,
-                              color: AppColors.textSecondary,
+                              color: context.textSecondaryColor,
                               size: 18,
                             ),
                           ),
@@ -201,7 +206,9 @@ class _SearchScreenState extends State<SearchScreen>
                       : null,
                   suffixIconConstraints: const BoxConstraints(),
                   filled: true,
-                  fillColor: const Color(0xFFEFEFEF),
+                  fillColor: isDarkTheme
+                      ? const Color(0xFF262626)
+                      : const Color(0xFFEFEFEF),
                   contentPadding: EdgeInsets.zero,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
@@ -224,20 +231,20 @@ class _SearchScreenState extends State<SearchScreen>
             const SizedBox(width: 10),
             GestureDetector(
               onTap: () {},
-              child: const Icon(
+              child: Icon(
                 Icons.qr_code_scanner_outlined,
                 size: 26,
-                color: AppColors.textPrimary,
+                color: context.textPrimaryColor,
               ),
             ),
           ] else ...[
             const SizedBox(width: 10),
             GestureDetector(
               onTap: _clearSearch,
-              child: const Text(
+              child: Text(
                 'Cancel',
                 style: TextStyle(
-                  color: AppColors.textPrimary,
+                  color: context.textPrimaryColor,
                   fontSize: 15,
                   fontWeight: FontWeight.w500,
                 ),
@@ -253,15 +260,17 @@ class _SearchScreenState extends State<SearchScreen>
 
   Widget _buildTabBar() {
     return Container(
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(bottom: BorderSide(color: AppColors.border, width: 0.5)),
+      decoration: BoxDecoration(
+        color: context.backgroundColor,
+        border: Border(
+          bottom: BorderSide(color: context.borderColor, width: 0.5),
+        ),
       ),
       child: TabBar(
         controller: _tabController,
-        indicatorColor: AppColors.textPrimary,
-        labelColor: AppColors.textPrimary,
-        unselectedLabelColor: AppColors.textSecondary,
+        indicatorColor: context.textPrimaryColor,
+        labelColor: context.textPrimaryColor,
+        unselectedLabelColor: context.textSecondaryColor,
         indicatorWeight: 1.5,
         labelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
         tabs: const [
@@ -277,8 +286,9 @@ class _SearchScreenState extends State<SearchScreen>
   // ── Category chips ────────────────────────────────────────────────────────
 
   Widget _buildCategoryChips() {
+    final isDarkTheme = isDark(context);
     return Container(
-      color: Colors.white,
+      color: context.backgroundColor,
       height: 40,
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
@@ -290,7 +300,9 @@ class _SearchScreenState extends State<SearchScreen>
             margin: const EdgeInsets.only(right: 6),
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
             decoration: BoxDecoration(
-              color: const Color(0xFFEFEFEF),
+              color: isDarkTheme
+                  ? const Color(0xFF262626)
+                  : const Color(0xFFEFEFEF),
               borderRadius: BorderRadius.circular(8),
             ),
             alignment: Alignment.center,
@@ -298,15 +310,15 @@ class _SearchScreenState extends State<SearchScreen>
               mainAxisSize: MainAxisSize.min,
               children: [
                 if (icon != null) ...[
-                  Icon(icon, size: 14, color: AppColors.textPrimary),
+                  Icon(icon, size: 14, color: context.textPrimaryColor),
                   const SizedBox(width: 4),
                 ],
                 Text(
                   label,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w500,
-                    color: AppColors.textPrimary,
+                    color: context.textPrimaryColor,
                   ),
                 ),
               ],
@@ -1056,10 +1068,11 @@ class _ExploreTile extends StatelessWidget {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            CachedNetworkImage(
-              imageUrl: post.imageUrl,
+            MediaImage(
+              path: post.imageUrl,
+              videoUrl: post.isVideo ? post.videoUrl : null,
               fit: BoxFit.cover,
-              errorWidget: (_, __, ___) => Container(
+              errorBuilder: (_, __, ___) => Container(
                 color: AppColors.border,
                 child: const Icon(
                   Icons.image_not_supported_outlined,
@@ -1140,10 +1153,11 @@ class _ExploreTile extends StatelessWidget {
   }
 
   Widget _coverImage(Post post) {
-    return CachedNetworkImage(
-      imageUrl: post.imageUrl,
+    return MediaImage(
+      path: post.imageUrl,
+      videoUrl: post.isVideo ? post.videoUrl : null,
       fit: BoxFit.cover,
-      errorWidget: (_, __, ___) => Container(
+      errorBuilder: (_, __, ___) => Container(
         color: AppColors.border,
         child: const Icon(
           Icons.image_not_supported_outlined,

@@ -19,7 +19,7 @@ void main() {
     );
     await tester.pump(const Duration(milliseconds: 500));
 
-    expect(find.text('Edit'), findsOneWidget);
+    expect(find.text('Edit'), findsNWidgets(2));
     expect(find.text('Clarendon'), findsOneWidget);
     expect(find.text('Moon'), findsOneWidget);
 

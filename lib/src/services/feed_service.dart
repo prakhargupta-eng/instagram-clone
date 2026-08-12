@@ -15,7 +15,10 @@ class FeedService extends ChangeNotifier {
   final Map<String, AppUser> _usersById = {};
 
   bool _loadedLocal = false;
+  bool _isLoading = false;
   final Set<String> _bookmarkedPostIds = {};
+
+  bool get isLoading => _isLoading;
 
   bool isBookmarked(String postId) => _bookmarkedPostIds.contains(postId);
 
@@ -37,12 +40,26 @@ class FeedService extends ChangeNotifier {
     }
   }
 
+  Future<void> refreshFeed() async {
+    _isLoading = true;
+    notifyListeners();
+    // Simulated API call latency (3 seconds)
+    await Future.delayed(const Duration(seconds: 3));
+    _isLoading = false;
+    notifyListeners();
+  }
+
   Future<void> ensureLocalPostsLoaded(AppUser currentUser) async {
     if (_loadedLocal) return;
     _loadedLocal = true;
+    _isLoading = true;
+    notifyListeners();
     ensureUserRegistered(currentUser);
 
     try {
+      // Simulated API call latency for initial load (3 seconds)
+      await Future.delayed(const Duration(seconds: 3));
+
       final db = SqlDatabaseHelper.instance;
 
       // Seed posts if empty
@@ -78,6 +95,9 @@ class FeedService extends ChangeNotifier {
       _stories.clear();
       _stories.addAll(await db.getAllStories());
 
+      _watchedStoryIds.clear();
+      _watchedStoryIds.addAll(await db.getWatchedStoryIds());
+
       _follows.clear();
       _follows.addAll(await db.getAllFollows());
 
@@ -88,15 +108,21 @@ class FeedService extends ChangeNotifier {
       }
     } catch (e) {
       debugPrint('FeedService init error: $e');
+    } finally {
+      _isLoading = false;
+      notifyListeners();
     }
-    notifyListeners();
   }
 
   List<Post> get posts => List.unmodifiable(_posts);
   List<Story> get stories => List.unmodifiable(_stories);
 
-  Post getPost(String id) =>
-      _posts.firstWhere((p) => p.id == id, orElse: () => _posts.first);
+  Post? getPost(String id) {
+    for (final post in _posts) {
+      if (post.id == id) return post;
+    }
+    return null;
+  }
 
   List<String> followingIdsOf(String userId) => _follows[userId] ?? const [];
 
@@ -164,6 +190,27 @@ class FeedService extends ChangeNotifier {
     return result;
   }
 
+  final Set<String> _watchedStoryIds = {};
+
+  bool isStoryWatched(String storyId) => _watchedStoryIds.contains(storyId);
+
+  void markStoryAsWatched(String storyId) {
+    if (!_watchedStoryIds.contains(storyId)) {
+      _watchedStoryIds.add(storyId);
+      SqlDatabaseHelper.instance.markStoryAsWatched(storyId);
+      notifyListeners();
+    }
+  }
+
+  bool hasUnwatchedStories(String userId) {
+    final userStories = _stories.where((s) {
+      final diff = DateTime.now().difference(s.createdAt);
+      return s.user.id == userId && diff.inHours < 24;
+    }).toList();
+    if (userStories.isEmpty) return false;
+    return userStories.any((s) => !_watchedStoryIds.contains(s.id));
+  }
+
   List<Story> storiesFor(AppUser user) {
     final followed = followingIdsOf(user.id);
     final now = DateTime.now();
@@ -175,8 +222,7 @@ class FeedService extends ChangeNotifier {
 
     final result = activeStories.where((s) {
       return s.user.id == user.id ||
-          followed.contains(s.user.id) ||
-          true;
+          followed.contains(s.user.id);
     }).toList();
 
     final seen = <String>{};

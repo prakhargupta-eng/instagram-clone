@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../adaptive_colors.dart';
 import 'package:instagram_clone/src/compontes/auth_text_field.dart';
 
 import '../../constants.dart';
@@ -69,7 +70,7 @@ class _SignupScreenState extends State<SignupScreen> {
     return GestureDetector(
       onTap: () => FocusScope.of(context).unfocus(),
       child: Scaffold(
-        backgroundColor: AppColors.surface,
+        backgroundColor: context.surfaceColor,
         appBar: AppBar(
           leading: IconButton(
             icon: const Icon(Icons.arrow_back),
@@ -169,12 +170,12 @@ class _SignupScreenState extends State<SignupScreen> {
       child: ElevatedButton(
         onPressed: _loading ? null : _submit,
         child: _loading
-            ? const SizedBox(
+            ?  SizedBox(
                 width: 20,
                 height: 20,
                 child: CircularProgressIndicator(
                   strokeWidth: 2,
-                  color: AppColors.surface,
+                  color: context.surfaceColor,
                 ),
               )
             : const Text(AppStrings.signUp),

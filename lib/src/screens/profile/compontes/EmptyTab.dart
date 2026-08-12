@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../../constants.dart';
+import '../../../adaptive_colors.dart';
 
 class EmptyTab extends StatelessWidget {
   const EmptyTab({super.key, required this.message});
@@ -11,7 +11,7 @@ class EmptyTab extends StatelessWidget {
     return Center(
       child: Text(
         message,
-        style: const TextStyle(color: AppColors.textSecondary),
+        style: TextStyle(color: context.textSecondaryColor),
       ),
     );
   }

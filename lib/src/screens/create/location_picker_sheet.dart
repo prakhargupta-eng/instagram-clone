@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../constants.dart';
+import '../../adaptive_colors.dart';
 
 class LocationPickerScreen extends StatefulWidget {
   const LocationPickerScreen({super.key});
@@ -40,18 +40,22 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
               .toList();
 
     return Scaffold(
-      backgroundColor: AppColors.surface,
+      backgroundColor: context.surfaceColor,
       appBar: AppBar(
-        backgroundColor: AppColors.surface,
-        foregroundColor: AppColors.textPrimary,
+        backgroundColor: context.surfaceColor,
+        foregroundColor: context.textPrimaryColor,
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.close),
           onPressed: () => Navigator.of(context).pop(),
         ),
-        title: const Text(
+        title: Text(
           'Select Location',
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            color: context.textPrimaryColor,
+          ),
         ),
       ),
       body: SafeArea(
@@ -62,6 +66,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
               child: TextField(
                 controller: _controller,
                 autofocus: true,
+                style: TextStyle(color: context.textPrimaryColor),
                 onChanged: (value) => setState(() => _text = value.trim()),
                 textInputAction: TextInputAction.search,
                 onSubmitted: (value) {
@@ -72,9 +77,10 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                 },
                 decoration: InputDecoration(
                   hintText: 'Search for a location',
-                  prefixIcon: const Icon(Icons.search),
+                  hintStyle: TextStyle(color: context.textSecondaryColor),
+                  prefixIcon: Icon(Icons.search, color: context.textSecondaryColor),
                   filled: true,
-                  fillColor: AppColors.background,
+                  fillColor: context.backgroundColor,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),
                     borderSide: BorderSide.none,
@@ -91,14 +97,14 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                     for (final suggestion in suggestions)
                       ListTile(
                         dense: true,
-                        leading: const Icon(
+                        leading: Icon(
                           Icons.location_on_outlined,
                           size: 20,
-                          color: AppColors.textSecondary,
+                          color: context.textSecondaryColor,
                         ),
                         title: Text(
                           suggestion,
-                          style: const TextStyle(fontSize: 14),
+                          style: TextStyle(fontSize: 14, color: context.textPrimaryColor),
                         ),
                         onTap: () => Navigator.of(context).pop(suggestion),
                       ),
@@ -106,11 +112,11 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                 ),
               ),
             if (suggestions.isEmpty)
-              const Expanded(
+              Expanded(
                 child: Center(
                   child: Text(
                     'No locations found',
-                    style: TextStyle(color: AppColors.textSecondary),
+                    style: TextStyle(color: context.textSecondaryColor),
                   ),
                 ),
               ),

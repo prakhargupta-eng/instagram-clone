@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../../app.dart';
 import '../../constants.dart';
 import '../../models/post.dart';
 import '../../models/user.dart';
@@ -13,13 +14,13 @@ class CommentsSheet extends StatefulWidget {
     required this.feedService,
     required this.post,
     required this.currentUser,
-    this.isDark = false,
+    this.isDark,
   });
 
   final FeedService feedService;
   final Post post;
   final AppUser currentUser;
-  final bool isDark;
+  final bool? isDark;
 
   @override
   State<CommentsSheet> createState() => _CommentsSheetState();
@@ -53,15 +54,22 @@ class _CommentsSheetState extends State<CommentsSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final dividerColor = widget.isDark ? Colors.white12 : AppColors.border;
-    final textColor = widget.isDark ? Colors.white : AppColors.textPrimary;
-    final subTextColor = widget.isDark ? Colors.white54 : AppColors.textSecondary;
-    final sheetBgColor = widget.isDark ? const Color(0xFF1E1E1E) : Colors.white;
-    final inputBgColor = widget.isDark ? const Color(0xFF2E2E2E) : AppColors.background;
+    final dark = widget.isDark ?? isDark(context);
+    final dividerColor = dark ? Colors.white12 : AppColors.border;
+    final textColor = dark ? Colors.white : AppColors.textPrimary;
+    final subTextColor = dark
+        ? Colors.white54
+        : AppColors.textSecondary;
+    final sheetBgColor = dark ? const Color(0xFF1E1E1E) : Colors.white;
+    final inputBgColor = dark
+        ? const Color(0xFF2E2E2E)
+        : AppColors.background;
 
     return Container(
       color: sheetBgColor,
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -70,21 +78,26 @@ class _CommentsSheetState extends State<CommentsSheet> {
             width: 36,
             height: 4,
             decoration: BoxDecoration(
-              color: widget.isDark ? Colors.white24 : AppColors.border,
+              color: dark ? Colors.white24 : AppColors.border,
               borderRadius: BorderRadius.circular(2),
             ),
           ),
           const SizedBox(height: 8),
           Text(
             AppStrings.comments,
-            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15, color: textColor),
+            style: TextStyle(
+              fontWeight: FontWeight.w600,
+              fontSize: 15,
+              color: textColor,
+            ),
           ),
           Divider(height: 16, color: dividerColor),
           Flexible(
             child: ListenableBuilder(
               listenable: widget.feedService,
               builder: (context, _) {
-                final post = widget.feedService.getPost(widget.post.id);
+                final post =
+                    widget.feedService.getPost(widget.post.id) ?? widget.post;
                 if (post.comments.isEmpty) {
                   return Padding(
                     padding: const EdgeInsets.all(32),
@@ -103,7 +116,10 @@ class _CommentsSheetState extends State<CommentsSheet> {
                       index: index,
                       createdAt: comment.createdAt,
                       child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 6,
+                        ),
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -115,17 +131,29 @@ class _CommentsSheetState extends State<CommentsSheet> {
                                 children: [
                                   Text(
                                     comment.author.username,
-                                    style: TextStyle(fontWeight: FontWeight.w600, color: textColor, fontSize: 13),
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                      color: textColor,
+                                      fontSize: 13,
+                                    ),
                                   ),
                                   const SizedBox(height: 2),
                                   Text(
                                     comment.text,
-                                    style: TextStyle(color: textColor, fontSize: 13),
+                                    style: TextStyle(
+                                      color: textColor,
+                                      fontSize: 13,
+                                    ),
                                   ),
                                   const SizedBox(height: 2),
                                   Text(
-                                    DateFormat('MMM d, h:mm a').format(comment.createdAt),
-                                    style: TextStyle(color: subTextColor, fontSize: 11),
+                                    DateFormat(
+                                      'MMM d, h:mm a',
+                                    ).format(comment.createdAt),
+                                    style: TextStyle(
+                                      color: subTextColor,
+                                      fontSize: 11,
+                                    ),
                                   ),
                                 ],
                               ),
@@ -155,18 +183,31 @@ class _CommentsSheetState extends State<CommentsSheet> {
                       hintStyle: TextStyle(color: subTextColor),
                       filled: true,
                       fillColor: inputBgColor,
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 10,
+                      ),
                       border: OutlineInputBorder(
-                        borderRadius: const BorderRadius.all(Radius.circular(20)),
+                        borderRadius: const BorderRadius.all(
+                          Radius.circular(20),
+                        ),
                         borderSide: BorderSide(color: dividerColor),
                       ),
                       enabledBorder: OutlineInputBorder(
-                        borderRadius: const BorderRadius.all(Radius.circular(20)),
+                        borderRadius: const BorderRadius.all(
+                          Radius.circular(20),
+                        ),
                         borderSide: BorderSide(color: dividerColor),
                       ),
                       focusedBorder: OutlineInputBorder(
-                        borderRadius: const BorderRadius.all(Radius.circular(20)),
-                        borderSide: BorderSide(color: widget.isDark ? Colors.white38 : AppColors.primary),
+                        borderRadius: const BorderRadius.all(
+                          Radius.circular(20),
+                        ),
+                        borderSide: BorderSide(
+                          color: dark
+                              ? Colors.white38
+                              : AppColors.primary,
+                        ),
                       ),
                     ),
                     textInputAction: TextInputAction.send,
@@ -182,14 +223,18 @@ class _CommentsSheetState extends State<CommentsSheet> {
                     curve: Curves.easeOutBack,
                     child: IconButton(
                       icon: const Icon(Icons.send, color: AppColors.primary),
-                      onPressed: _hasText ? () => _submit(_controller.text) : null,
+                      onPressed: _hasText
+                          ? () => _submit(_controller.text)
+                          : null,
                     ),
                   ),
                 ),
               ],
             ),
           ),
-          SizedBox(height: MediaQuery.of(context).viewPadding.bottom > 0 ? 0 : 8),
+          SizedBox(
+            height: MediaQuery.of(context).viewPadding.bottom > 0 ? 0 : 8,
+          ),
         ],
       ),
     );
@@ -216,7 +261,8 @@ class SlideFadeTransitionItem extends StatefulWidget {
   final DateTime createdAt;
 
   @override
-  State<SlideFadeTransitionItem> createState() => _SlideFadeTransitionItemState();
+  State<SlideFadeTransitionItem> createState() =>
+      _SlideFadeTransitionItemState();
 }
 
 class _SlideFadeTransitionItemState extends State<SlideFadeTransitionItem>
@@ -233,22 +279,23 @@ class _SlideFadeTransitionItemState extends State<SlideFadeTransitionItem>
       duration: const Duration(milliseconds: 350),
     );
 
-    _opacity = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeOut),
-    );
+    _opacity = Tween<double>(
+      begin: 0.0,
+      end: 1.0,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOut));
 
     _slide = Tween<Offset>(
       begin: const Offset(0.0, 0.2),
       end: Offset.zero,
-    ).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeOutQuad),
-    );
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutQuad));
 
     final isNew = DateTime.now().difference(widget.createdAt).inSeconds < 2;
     if (isNew) {
       _controller.forward();
     } else {
-      final delay = Duration(milliseconds: (widget.index < 6 ? widget.index : 6) * 50);
+      final delay = Duration(
+        milliseconds: (widget.index < 6 ? widget.index : 6) * 50,
+      );
       Future.delayed(delay, () {
         if (mounted) {
           _controller.forward();
@@ -267,10 +314,7 @@ class _SlideFadeTransitionItemState extends State<SlideFadeTransitionItem>
   Widget build(BuildContext context) {
     return FadeTransition(
       opacity: _opacity,
-      child: SlideTransition(
-        position: _slide,
-        child: widget.child,
-      ),
+      child: SlideTransition(position: _slide, child: widget.child),
     );
   }
 }
@@ -280,12 +324,13 @@ Future<void> showCommentsSheet(
   required FeedService feedService,
   required Post post,
   required AppUser currentUser,
-  bool isDark = false,
+  bool? isDark,
 }) {
+  final effectiveIsDark = isDark ?? AppScope.of(context).themeService.isDarkMode;
   return showModalBottomSheet(
     context: context,
     isScrollControlled: true,
-    backgroundColor: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+    backgroundColor: effectiveIsDark ? const Color(0xFF1E1E1E) : Colors.white,
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
     ),
@@ -293,7 +338,7 @@ Future<void> showCommentsSheet(
       feedService: feedService,
       post: post,
       currentUser: currentUser,
-      isDark: isDark,
+      isDark: effectiveIsDark,
     ),
   );
 }

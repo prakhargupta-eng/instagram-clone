@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
-
+import '../adaptive_colors.dart';
+import '../app.dart';
 import '../constants.dart';
 import '../models/story.dart';
 import '../models/user.dart';
 import '../screens/home/story_viewer_screen.dart';
+import '../services/feed_service.dart';
 import 'avatar.dart';
 
 class StoryBar extends StatelessWidget {
@@ -11,11 +13,13 @@ class StoryBar extends StatelessWidget {
     super.key,
     required this.stories,
     required this.currentUser,
+    required this.feedService,
     this.onAddStory,
   });
 
   final List<Story> stories;
   final AppUser currentUser;
+  final FeedService feedService;
   final VoidCallback? onAddStory;
 
   @override
@@ -24,13 +28,15 @@ class StoryBar extends StatelessWidget {
         .where((s) => s.user.id == currentUser.id)
         .toList();
     final hasStory = currentUserStories.isNotEmpty;
+    final hasUnwatched = feedService.hasUnwatchedStories(currentUser.id);
+    final isDarkMode = isDark(context);
 
     return Container(
-      color: Colors.white,
+      color: context.surfaceColor,
       child: Column(
         children: [
           SizedBox(
-            height: 110,
+            height: 116,
             child: ListView(
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
@@ -41,7 +47,12 @@ class StoryBar extends StatelessWidget {
                     url: currentUser.avatarUrl,
                     radius: 32,
                     showRing: hasStory,
-                    gradientRing: hasStory,
+                    gradientRing: hasUnwatched,
+                    ringColor: hasUnwatched
+                        ? AppColors.storyRingDefault
+                        : (isDarkMode
+                              ? const Color(0xFF363636)
+                              : Colors.grey.shade300),
                     ringWidth: 2.5,
                   ),
                   isAdd: !hasStory,
@@ -54,6 +65,7 @@ class StoryBar extends StatelessWidget {
                             initialIndex: stories.indexOf(
                               currentUserStories.first,
                             ),
+                            feedService: feedService,
                           ),
                         ),
                       );
@@ -71,7 +83,15 @@ class StoryBar extends StatelessWidget {
                         url: story.user.avatarUrl,
                         radius: 30,
                         showRing: true,
-                        gradientRing: true,
+                        gradientRing: feedService.hasUnwatchedStories(
+                          story.user.id,
+                        ),
+                        ringColor:
+                            feedService.hasUnwatchedStories(story.user.id)
+                            ? AppColors.storyRingDefault
+                            : (isDarkMode
+                                  ? const Color(0xFF363636)
+                                  : Colors.grey.shade300),
                         ringWidth: 2.5,
                       ),
                       onTap: () {
@@ -80,6 +100,7 @@ class StoryBar extends StatelessWidget {
                             builder: (_) => StoryViewerScreen(
                               stories: stories,
                               initialIndex: stories.indexOf(story),
+                              feedService: feedService,
                             ),
                           ),
                         );
@@ -88,7 +109,7 @@ class StoryBar extends StatelessWidget {
               ],
             ),
           ),
-          const Divider(height: 0.5, thickness: 0.5, color: AppColors.border),
+          Divider(height: 0.5, thickness: 0.5, color: context.borderColor),
         ],
       ),
     );
@@ -128,11 +149,11 @@ class _StoryAvatar extends StatelessWidget {
                     right: -2,
                     child: Container(
                       padding: const EdgeInsets.all(1.5),
-                      decoration: const BoxDecoration(
+                      decoration: BoxDecoration(
                         color: AppColors.primary,
                         shape: BoxShape.circle,
                         border: Border.fromBorderSide(
-                          BorderSide(color: Colors.white, width: 2),
+                          BorderSide(color: context.surfaceColor, width: 2),
                         ),
                       ),
                       child: const Icon(
@@ -152,9 +173,9 @@ class _StoryAvatar extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 textAlign: TextAlign.center,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 11,
-                  color: Colors.black,
+                  color: context.textPrimaryColor,
                   fontWeight: FontWeight.w400,
                 ),
               ),

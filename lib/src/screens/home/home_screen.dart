@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:skeletonizer/skeletonizer.dart';
 import 'package:audioplayers/audioplayers.dart';
 
+import '../../adaptive_colors.dart';
 import '../../app.dart';
 import '../../constants.dart';
 import '../../models/post.dart';
@@ -217,21 +219,21 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.backgroundColor,
       appBar: AppBar(
-        backgroundColor: AppColors.background,
+        backgroundColor: context.backgroundColor,
         elevation: 0,
         scrolledUnderElevation: 0,
         titleSpacing: 16,
         title: Text(
           AppStrings.appName,
-          style: const TextStyle(
+          style: TextStyle(
             fontFamily: 'serif',
             fontStyle: FontStyle.italic,
             fontSize: 28,
             fontWeight: FontWeight.w600,
             letterSpacing: -0.5,
-            color: AppColors.textPrimary,
+            color: context.textPrimaryColor,
           ),
         ),
         actions: [
@@ -240,11 +242,11 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
               'lib/src/asserts/massageIcon.png',
               width: 27,
               height: 27,
-              color: AppColors.textPrimary,
+              color: context.textPrimaryColor,
               colorBlendMode: BlendMode.srcIn,
-              errorBuilder: (_, _, _) => const Icon(
+              errorBuilder: (_, _, _) => Icon(
                 Icons.send_outlined,
-                color: AppColors.textPrimary,
+                color: context.textPrimaryColor,
                 size: 27,
               ),
             ),
@@ -257,7 +259,7 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
         ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(0.5),
-          child: Container(color: AppColors.border, height: 0.5),
+          child: Container(color: context.borderColor, height: 0.5),
         ),
       ),
       body: AnimatedBuilder(
@@ -298,95 +300,115 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
     final sessionKey = widget.authService.sessionKey;
     final pending = widget.feedService.pendingUploads;
 
-    return ListView.builder(
-      controller: _scrollController,
-      key: PageStorageKey('feed_${_currentUser.id}_${sessionKey}_$keySuffix'),
-      padding: EdgeInsets.zero,
-      itemCount: feed.length + 1 + pending.length,
-      itemBuilder: (context, index) {
-        if (index == 0) {
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              StoryBar(
-                stories: widget.feedService.storiesFor(_currentUser),
-                currentUser: _currentUser,
-                onAddStory: _openCreateStory,
-              ),
-              if (showSuggestions) ...[
-                const Padding(
-                  padding: EdgeInsets.only(left: 16, top: 12, bottom: 4),
-                  child: Text(
-                    'Explore Trending Tags',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 14,
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                ),
-                _buildSuggestedTagsRow(_suggestedTags),
-                const SizedBox(height: 8),
-              ],
-            ],
-          );
-        }
+    final isLoading = widget.feedService.isLoading;
 
-        if (index <= pending.length) {
-          final upload = pending[index - 1];
-          return _buildPendingUploadItem(upload);
-        }
-
-        final post = feed[index - 1 - pending.length];
-        return Container(
-          key: _getKeyForPost(post.id),
-          child: Column(
-            children: [
-              const Divider(
-                height: 0.5,
-                thickness: 0.5,
-                color: AppColors.border,
-              ),
-              PostCard(
-                post: post,
-                currentUserId: _currentUser.id,
-                author:
-                    widget.feedService.userById(post.author.id) ?? post.author,
-                isMuted: _isMuted,
-                isActive:
-                    _currentIndex == (index - 1 - pending.length) &&
-                    widget.visible &&
-                    _isRouteActive,
-                onMuteToggle: _toggleMute,
-                onLike: () =>
-                    widget.feedService.toggleLike(post.id, _currentUser.id),
-                onComment: () => showCommentsSheet(
-                  context,
-                  feedService: widget.feedService,
-                  post: post,
-                  currentUser: _currentUser,
-                ),
-                isBookmarked: widget.feedService.isBookmarked(post.id),
-                onBookmark: () => widget.feedService.toggleBookmark(post.id),
-                onTapMedia: () {
-                  if (post.music != null && post.music!.isNotEmpty) {
-                    _toggleMute();
-                  }
-                },
-                onDelete: () => widget.feedService.deletePost(post.id),
-              ),
-            ],
+    return RefreshIndicator(
+      onRefresh: () => widget.feedService.refreshFeed(),
+      child: Skeletonizer(
+        enabled: isLoading,
+        enableSwitchAnimation: true,
+        child: ListView.builder(
+          controller: _scrollController,
+          key: PageStorageKey(
+            'feed_${_currentUser.id}_${sessionKey}_$keySuffix',
           ),
-        );
-      },
+          padding: EdgeInsets.zero,
+          itemCount: feed.length + 1 + pending.length,
+          itemBuilder: (context, index) {
+            if (index == 0) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  StoryBar(
+                    stories: widget.feedService.storiesFor(_currentUser),
+                    currentUser: _currentUser,
+                    feedService: widget.feedService,
+                    onAddStory: _openCreateStory,
+                  ),
+                  if (showSuggestions) ...[
+                    Padding(
+                      padding: const EdgeInsets.only(
+                        left: 16,
+                        top: 12,
+                        bottom: 4,
+                      ),
+                      child: Text(
+                        'Explore Trending Tags',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                          color: context.textPrimaryColor,
+                        ),
+                      ),
+                    ),
+                    _buildSuggestedTagsRow(_suggestedTags),
+                    const SizedBox(height: 8),
+                  ],
+                ],
+              );
+            }
+
+            if (index <= pending.length) {
+              final upload = pending[index - 1];
+              return _buildPendingUploadItem(upload);
+            }
+
+            final post = feed[index - 1 - pending.length];
+            return Container(
+              key: _getKeyForPost(post.id),
+              child: Column(
+                children: [
+                  Divider(
+                    height: 0.5,
+                    thickness: 0.5,
+                    color: context.borderColor,
+                  ),
+                  PostCard(
+                    post: post,
+                    currentUserId: _currentUser.id,
+                    author:
+                        widget.feedService.userById(post.author.id) ??
+                        post.author,
+                    isMuted: _isMuted,
+                    isActive:
+                        _currentIndex == (index - 1 - pending.length) &&
+                        widget.visible &&
+                        _isRouteActive,
+                    onMuteToggle: _toggleMute,
+                    onLike: () =>
+                        widget.feedService.toggleLike(post.id, _currentUser.id),
+                    onComment: () => showCommentsSheet(
+                      context,
+                      feedService: widget.feedService,
+                      post: post,
+                      currentUser: _currentUser,
+                    ),
+                    isBookmarked: widget.feedService.isBookmarked(post.id),
+                    onBookmark: () =>
+                        widget.feedService.toggleBookmark(post.id),
+                    onTapMedia: () {
+                      if (post.music != null && post.music!.isNotEmpty) {
+                        _toggleMute();
+                      }
+                    },
+                    onDelete: () => widget.feedService.deletePost(post.id),
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
+      ),
     );
   }
 
   Widget _buildPendingUploadItem(PendingUpload upload) {
     return Container(
-      decoration: const BoxDecoration(
-        color: AppColors.surface,
-        border: Border(bottom: BorderSide(color: AppColors.border, width: 0.5)),
+      decoration: BoxDecoration(
+        color: context.surfaceColor,
+        border: Border(
+          bottom: BorderSide(color: context.borderColor, width: 0.5),
+        ),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Column(
@@ -400,7 +422,7 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
                 height: 20,
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(3),
-                  border: Border.all(color: AppColors.border, width: 0.5),
+                  border: Border.all(color: context.borderColor, width: 0.5),
                 ),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(3),
@@ -408,20 +430,20 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
                     imageUrl: upload.imageUrl,
                     fit: BoxFit.cover,
                     errorWidget: (context, url, error) {
-                      return Container(color: AppColors.border);
+                      return Container(color: context.borderColor);
                     },
                   ),
                 ),
               ),
               const SizedBox(width: 12),
               // Text "Uploading..."
-              const Expanded(
+              Expanded(
                 child: Text(
                   'Uploading...',
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
-                    color: AppColors.textPrimary,
+                    color: context.textPrimaryColor,
                   ),
                 ),
               ),
@@ -433,7 +455,7 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
             borderRadius: BorderRadius.circular(2),
             child: LinearProgressIndicator(
               value: upload.progress,
-              backgroundColor: AppColors.border.withOpacity(0.5),
+              backgroundColor: context.borderColor.withOpacity(0.5),
               valueColor: const AlwaysStoppedAnimation<Color>(
                 AppColors.primary,
               ),
@@ -490,7 +512,7 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
               label: Text(
                 tag,
                 style: TextStyle(
-                  color: isSelected ? Colors.white : AppColors.textPrimary,
+                  color: isSelected ? Colors.white : context.textPrimaryColor,
                   fontWeight: FontWeight.w600,
                   fontSize: 13,
                 ),
@@ -505,14 +527,14 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
                   }
                 });
               },
-              backgroundColor: AppColors.surface,
+              backgroundColor: context.surfaceColor,
               selectedColor: Colors.blue,
               checkmarkColor: Colors.white,
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(18),
                 side: BorderSide(
-                  color: isSelected ? Colors.transparent : AppColors.border,
+                  color: isSelected ? Colors.transparent : context.borderColor,
                   width: 0.5,
                 ),
               ),

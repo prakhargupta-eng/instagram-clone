@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../adaptive_colors.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:instagram_clone/src/compontes/ToastHelper.dart';
 import 'package:instagram_clone/src/utils/validation.dart';
@@ -103,7 +104,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   void _showGenderPicker() {
     showModalBottomSheet(
       context: context,
-      backgroundColor: AppColors.surface,
+      backgroundColor: context.surfaceColor,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
       ),
@@ -118,17 +119,17 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 width: 36,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: AppColors.border,
+                  color: context.borderColor,
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
               const SizedBox(height: 12),
-              const Text(
+               Text(
                 'Gender',
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
-                  color: AppColors.textPrimary,
+                  color: context.textPrimaryColor,
                 ),
               ),
               const Divider(height: 24),
@@ -136,7 +137,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 ListTile(
                   title: Text(
                     option,
-                    style: const TextStyle(color: AppColors.textPrimary),
+                    style: TextStyle(color: context.textPrimaryColor),
                   ),
                   onTap: () {
                     setState(() {
@@ -158,7 +159,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     return GestureDetector(
       onTap: () => FocusScope.of(context).unfocus(),
       child: Scaffold(
-        backgroundColor: AppColors.surface,
+        backgroundColor: context.surfaceColor,
         appBar: AppBar(
           title: const Text(
             'Edit profile',
@@ -251,8 +252,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   }) {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 8),
-      decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: AppColors.border, width: 0.5)),
+      decoration:  BoxDecoration(
+        border: Border(bottom: BorderSide(color: context.borderColor, width: 0.5)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -263,10 +264,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               padding: const EdgeInsets.only(top: 6),
               child: Text(
                 label,
-                style: const TextStyle(
+                style:  TextStyle(
                   fontSize: 15,
                   fontWeight: FontWeight.w500,
-                  color: AppColors.textPrimary,
+                  color: context.textPrimaryColor,
                 ),
               ),
             ),
@@ -277,15 +278,15 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               maxLines: maxLines,
               readOnly: readOnly,
               onTap: onTap,
-              style: const TextStyle(
+              style:  TextStyle(
                 fontSize: 15,
-                color: AppColors.textPrimary,
+                color: context.textPrimaryColor,
               ),
               validator: validator,
               decoration: InputDecoration(
                 hintText: hintText,
-                hintStyle: const TextStyle(
-                  color: AppColors.textSecondary,
+                hintStyle:  TextStyle(
+                  color: context.textSecondaryColor,
                   fontSize: 15,
                 ),
                 border: InputBorder.none,
@@ -304,12 +305,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const SizedBox(height: 32),
-        const Text(
+         Text(
           'Private Information',
           style: TextStyle(
             fontSize: 14,
             fontWeight: FontWeight.bold,
-            color: AppColors.textSecondary,
+            color: context.textSecondaryColor,
           ),
         ),
         const SizedBox(height: 8),
@@ -321,20 +322,20 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         ),
         Container(
           padding: const EdgeInsets.symmetric(vertical: 8),
-          decoration: const BoxDecoration(
+          decoration:  BoxDecoration(
             border: Border(
-              bottom: BorderSide(color: AppColors.border, width: 0.5),
+              bottom: BorderSide(color: context.borderColor, width: 0.5),
             ),
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
+               Text(
                 'Private Account',
                 style: TextStyle(
                   fontSize: 15,
                   fontWeight: FontWeight.w500,
-                  color: AppColors.textPrimary,
+                  color: context.textPrimaryColor,
                 ),
               ),
               Switch.adaptive(

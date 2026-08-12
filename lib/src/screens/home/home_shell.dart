@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../adaptive_colors.dart';
 
 import '../../constants.dart';
 import '../../models/user.dart';
@@ -61,9 +62,9 @@ class _HomeShellState extends State<HomeShell> {
     return Scaffold(
       body: IndexedStack(index: screenIndex, children: screens),
       bottomNavigationBar: Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          border: Border(top: BorderSide(color: AppColors.border, width: 0.5)),
+        decoration: BoxDecoration(
+          color: context.surfaceColor,
+          border: Border(top: BorderSide(color: context.borderColor, width: 0.5)),
         ),
         child: SafeArea(
           top: false,
@@ -108,7 +109,7 @@ class _HomeShellState extends State<HomeShell> {
                       decoration: _selectedIndex == 4
                           ? BoxDecoration(
                               shape: BoxShape.circle,
-                              border: Border.all(color: AppColors.textPrimary, width: 2),
+                              border: Border.all(color: context.textPrimaryColor, width: 2),
                             )
                           : null,
                       child: Avatar(
@@ -133,7 +134,7 @@ class _HomeShellState extends State<HomeShell> {
         context: context,
         isScrollControlled: true,
         useSafeArea: true,
-        backgroundColor: AppColors.surface,
+        backgroundColor: context.surfaceColor,
         builder: (_) => CreatePostScreen(
           feedService: _feedService,
           currentUser: _currentUser,
@@ -161,7 +162,7 @@ class _NavItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = isSelected ? AppColors.textPrimary : AppColors.textSecondary;
+    final color = isSelected ? context.textPrimaryColor : context.textSecondaryColor;
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,

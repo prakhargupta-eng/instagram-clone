@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
-
-import '../../../constants.dart';
+import '../../../adaptive_colors.dart';
 import '../../../models/post.dart';
 import '../../../routes/app_routes.dart';
 import '../../../services/feed_service.dart';
@@ -38,22 +37,23 @@ class PostTile extends StatelessWidget {
             tag: 'post_image_${post.id}',
             child: MediaImage(
               path: post.imageUrl,
+              videoUrl: post.isVideo ? post.videoUrl : null,
               fit: BoxFit.cover,
               errorBuilder: (_, _, _) => Container(
-                color: AppColors.border,
-                child: const Icon(
+                color: context.borderColor,
+                child: Icon(
                   Icons.image_not_supported_outlined,
-                  color: AppColors.textSecondary,
+                  color: context.textSecondaryColor,
                 ),
               ),
             ),
           ),
           if (post.isVideo)
-            const Align(
+             Align(
               alignment: Alignment.topRight,
               child: Padding(
                 padding: EdgeInsets.all(4),
-                child: Icon(Icons.play_circle, color: AppColors.white, size: 20),
+                child: Icon(Icons.play_circle, color: context.textSecondaryColor, size: 20),
               ),
             ),
         ],

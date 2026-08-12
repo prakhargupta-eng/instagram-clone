@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart' as video;
 import '../../constants.dart';
 import '../../models/story.dart';
+import '../../services/feed_service.dart';
 import '../../services/local_post_store.dart';
 import '../../widgets/avatar.dart';
 
@@ -13,10 +14,12 @@ class StoryViewerScreen extends StatefulWidget {
     super.key,
     required this.stories,
     required this.initialIndex,
+    this.feedService,
   });
 
   final List<Story> stories;
   final int initialIndex;
+  final FeedService? feedService;
 
   @override
   State<StoryViewerScreen> createState() => _StoryViewerScreenState();
@@ -31,6 +34,18 @@ class _StoryViewerScreenState extends State<StoryViewerScreen> {
     super.initState();
     _currentIndex = widget.initialIndex;
     _pageController = PageController(initialPage: widget.initialIndex);
+    _markCurrentStoryWatched();
+  }
+
+  void _markCurrentStoryWatched() {
+    if (widget.feedService != null &&
+        widget.stories.isNotEmpty &&
+        _currentIndex < widget.stories.length) {
+      final story = widget.stories[_currentIndex];
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        widget.feedService!.markStoryAsWatched(story.id);
+      });
+    }
   }
 
   @override
@@ -87,6 +102,7 @@ class _StoryViewerScreenState extends State<StoryViewerScreen> {
             setState(() {
               _currentIndex = index;
             });
+            _markCurrentStoryWatched();
           },
           itemBuilder: (context, index) {
             final story = widget.stories[index];

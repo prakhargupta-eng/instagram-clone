@@ -7,6 +7,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:photo_manager/photo_manager.dart';
 import 'package:video_player/video_player.dart' as video;
 
+import '../../adaptive_colors.dart';
 import '../../constants.dart';
 import '../../models/post.dart';
 import '../../models/story.dart';
@@ -14,6 +15,9 @@ import '../../models/user.dart';
 import '../../services/feed_service.dart';
 import '../../services/local_post_store.dart';
 import '../../widgets/media_image.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:get_thumbnail_video/video_thumbnail.dart';
+import 'package:get_thumbnail_video/index.dart';
 import 'post_editor_screen.dart';
 import 'location_picker_sheet.dart';
 import 'music_picker_sheet.dart';
@@ -24,41 +28,49 @@ class _MediaSelection {
     required this.url,
     required this.thumbnail,
     required this.isVideo,
+    this.filterIndex = 0,
+    this.brightness = 0.0,
+    this.contrast = 1.0,
+    this.saturation = 1.0,
   });
 
   final String url;
   final String thumbnail;
   final bool isVideo;
+  final int filterIndex;
+  final double brightness;
+  final double contrast;
+  final double saturation;
 }
 
 const _mockVideos = <(String, String)>[
   (
     'https://test-videos.co.uk/vids/sintel/mp4/h264/720/Sintel_720_10s_1MB.mp4',
-    'https://picsum.photos/seed/vpick1/400/600',
+    'https://images.unsplash.com/photo-1541963463532-d68292c34b19?w=400&fit=crop',
   ),
   (
     'https://test-videos.co.uk/vids/sintel/mp4/h264/360/Sintel_360_10s_1MB.mp4',
-    'https://picsum.photos/seed/vpick2/400/600',
+    'https://images.unsplash.com/photo-1541963463532-d68292c34b19?w=400&fit=crop',
   ),
   (
     'https://test-videos.co.uk/vids/jellyfish/mp4/h264/360/Jellyfish_360_10s_1MB.mp4',
-    'https://picsum.photos/seed/vpick3/400/600',
+    'https://images.unsplash.com/photo-1568430462989-44163eb1752f?w=400&fit=crop',
   ),
   (
     'https://test-videos.co.uk/vids/elephantsdream/mp4/h264/360/ElephantsDream_360_10s_1MB.mp4',
-    'https://picsum.photos/seed/vpick4/400/600',
+    'https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=400&fit=crop',
   ),
   (
     'https://test-videos.co.uk/vids/caminandes/mp4/h264/360/Caminandes_360_10s_1MB.mp4',
-    'https://picsum.photos/seed/vpick5/400/600',
+    'https://images.unsplash.com/photo-1589182373726-e4f658ab50f0?w=400&fit=crop',
   ),
   (
     'https://www.w3schools.com/html/mov_bbb.mp4',
-    'https://picsum.photos/seed/vpick6/400/600',
+    'https://images.unsplash.com/photo-1501854140801-50d01698950b?w=400&fit=crop',
   ),
   (
     'https://media.w3.org/2010/05/sintel/trailer.mp4',
-    'https://picsum.photos/seed/vpick7/400/600',
+    'https://images.unsplash.com/photo-1541963463532-d68292c34b19?w=400&fit=crop',
   ),
 ];
 
@@ -154,36 +166,103 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
   }
 
   Future<void> _openEditor({required String url, required bool isVideo}) async {
+    String? editorThumbnail;
+    if (isVideo) {
+      for (final item in _mockVideos) {
+        if (item.$1 == url) {
+          editorThumbnail = item.$2;
+          break;
+        }
+      }
+    }
+
     final edited = await Navigator.of(context).push<String>(
       MaterialPageRoute(
         fullscreenDialog: true,
-        builder: (_) => PostEditorScreen(mediaUrl: url, isVideo: isVideo),
+        builder: (_) => PostEditorScreen(
+          mediaUrl: url,
+          isVideo: isVideo,
+          thumbnailUrl: editorThumbnail,
+        ),
       ),
     );
     if (edited == null || !mounted) return;
 
-    String thumb = edited;
+    int filterIndex = 0;
+    double brightness = 0.0;
+    double contrast = 1.0;
+    double saturation = 1.0;
+    String finalUrl = edited;
+    String? returnedThumbnail;
+
     if (isVideo) {
-      (String, String)? match;
-      for (final item in _mockVideos) {
-        if (item.$1 == url) {
-          match = item;
-          break;
+      try {
+        final uri = Uri.parse(edited);
+        final cleanUri = uri.replace(queryParameters: {});
+        finalUrl = cleanUri.scheme == 'file'
+            ? cleanUri.toFilePath()
+            : cleanUri.toString();
+        final q = uri.queryParameters;
+        if (q.containsKey('filterIndex')) {
+          filterIndex = int.tryParse(q['filterIndex']!) ?? 0;
         }
-      }
-      if (match != null) {
-        thumb = match.$2;
+        if (q.containsKey('brightness')) {
+          brightness = double.tryParse(q['brightness']!) ?? 0.0;
+        }
+        if (q.containsKey('contrast')) {
+          contrast = double.tryParse(q['contrast']!) ?? 1.0;
+        }
+        if (q.containsKey('saturation')) {
+          saturation = double.tryParse(q['saturation']!) ?? 1.0;
+        }
+        if (q.containsKey('thumbnailPath')) {
+          returnedThumbnail = q['thumbnailPath'];
+        }
+      } catch (_) {}
+    }
+
+    String thumb = finalUrl;
+    if (isVideo) {
+      if (returnedThumbnail != null && returnedThumbnail.isNotEmpty) {
+        thumb = returnedThumbnail;
       } else {
-        thumb =
-            'https://picsum.photos/seed/vid_${DateTime.now().millisecondsSinceEpoch}/600/600';
+        (String, String)? match;
+        for (final item in _mockVideos) {
+          if (item.$1 == url) {
+            match = item;
+            break;
+          }
+        }
+        if (match != null) {
+          thumb = match.$2;
+        } else {
+          try {
+            final tempDir = await getTemporaryDirectory();
+            final xFile = await VideoThumbnail.thumbnailFile(
+              video: finalUrl,
+              thumbnailPath: tempDir.path,
+              imageFormat: ImageFormat.JPEG,
+              maxWidth: 600,
+              quality: 75,
+            );
+            thumb = xFile.path;
+          } catch (_) {
+            thumb =
+                'https://picsum.photos/seed/vid_${DateTime.now().millisecondsSinceEpoch}/600/600';
+          }
+        }
       }
     }
 
     setState(() {
       _selected = _MediaSelection(
-        url: edited,
+        url: finalUrl,
         thumbnail: thumb,
         isVideo: isVideo,
+        filterIndex: filterIndex,
+        brightness: brightness,
+        contrast: contrast,
+        saturation: saturation,
       );
     });
   }
@@ -301,6 +380,10 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
         musicPreviewUrl: _musicPreviewUrl,
         createdAt: DateTime.now(),
         isVideo: selection.isVideo,
+        filterIndex: selection.filterIndex,
+        brightness: selection.brightness,
+        contrast: selection.contrast,
+        saturation: selection.saturation,
       );
       Navigator.of(context).pop();
       widget.feedService.startPostUpload(post);
@@ -312,16 +395,20 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
     return GestureDetector(
       onTap: () => FocusScope.of(context).unfocus(),
       child: Scaffold(
-        backgroundColor: AppColors.surface,
+        backgroundColor: context.surfaceColor,
         appBar: AppBar(
-          backgroundColor: AppColors.surface,
-          foregroundColor: AppColors.textPrimary,
+          backgroundColor: context.surfaceColor,
+          foregroundColor: context.textPrimaryColor,
           elevation: 0,
           scrolledUnderElevation: 0,
           centerTitle: true,
           title: Text(
             _selected == null ? 'New Post' : 'New Post',
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+              color: context.textPrimaryColor,
+            ),
           ),
           leading: _selected == null
               ? IconButton(
@@ -329,9 +416,9 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                   onPressed: () => Navigator.of(context).maybePop(),
                 )
               : IconButton(
-                  icon: const Icon(
+                  icon: Icon(
                     Icons.arrow_back_ios_new,
-                    color: AppColors.textPrimary,
+                    color: context.textPrimaryColor,
                     size: 20,
                   ),
                   onPressed: () => setState(() => _selected = null),
@@ -362,7 +449,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
           ],
           bottom: PreferredSize(
             preferredSize: const Size.fromHeight(0.5),
-            child: Container(color: AppColors.border, height: 0.5),
+            child: Container(color: context.borderColor, height: 0.5),
           ),
         ),
         body: _selected == null ? _buildPicker() : _buildCaption(),
@@ -376,26 +463,26 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
         // ── Recents header ──────────────────────────────────────────
         SliverToBoxAdapter(
           child: Container(
-            color: AppColors.surface,
+            color: context.surfaceColor,
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Row(
                   children: [
-                    const Text(
+                    Text(
                       'Recents',
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
-                        color: AppColors.textPrimary,
+                        color: context.textPrimaryColor,
                       ),
                     ),
                     const SizedBox(width: 4),
-                    const Icon(
+                    Icon(
                       Icons.expand_more,
                       size: 20,
-                      color: AppColors.textPrimary,
+                      color: context.textPrimaryColor,
                     ),
                   ],
                 ),
@@ -446,16 +533,16 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(
+                        Icon(
                           Icons.photo_library_outlined,
                           size: 48,
-                          color: AppColors.textSecondary,
+                          color: context.textSecondaryColor,
                         ),
                         const SizedBox(height: 12),
                         Text(
                           _galleryError!,
-                          style: const TextStyle(
-                            color: AppColors.textSecondary,
+                          style: TextStyle(
+                            color: context.textSecondaryColor,
                             fontSize: 14,
                           ),
                         ),
@@ -484,14 +571,14 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Padding(
-                padding: EdgeInsets.fromLTRB(14, 20, 14, 10),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(14, 20, 14, 10),
                 child: Text(
                   'Videos',
                   style: TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w700,
-                    color: AppColors.textPrimary,
+                    color: context.textPrimaryColor,
                   ),
                 ),
               ),
@@ -511,7 +598,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                           clipBehavior: Clip.antiAlias,
                           decoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(6),
-                            color: AppColors.border,
+                            color: context.borderColor,
                           ),
                           child: Stack(
                             fit: StackFit.expand,
@@ -581,13 +668,13 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                   maxLines: 5,
                   minLines: 2,
                   autofocus: true,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 15,
-                    color: AppColors.textPrimary,
+                    color: context.textPrimaryColor,
                   ),
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     hintText: 'Write a caption...',
-                    hintStyle: TextStyle(color: AppColors.textSecondary),
+                    hintStyle: TextStyle(color: context.textSecondaryColor),
                     filled: false,
                     border: InputBorder.none,
                     contentPadding: EdgeInsets.zero,
@@ -604,14 +691,15 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                       ? Stack(
                           fit: StackFit.expand,
                           children: [
-                            CachedNetworkImage(
-                              imageUrl: selection.thumbnail,
+                            MediaImage(
+                              path: selection.thumbnail,
+                              videoUrl: selection.url,
                               fit: BoxFit.cover,
-                              errorWidget: (_, __, ___) => Container(
-                                color: AppColors.border,
-                                child: const Icon(
+                              errorBuilder: (_, __, ___) => Container(
+                                color: context.borderColor,
+                                child: Icon(
                                   Icons.play_circle_outline,
-                                  color: AppColors.textSecondary,
+                                  color: context.textSecondaryColor,
                                 ),
                               ),
                             ),
@@ -634,7 +722,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
           ),
         ),
         const SizedBox(height: 12),
-        const Divider(height: 0.5, thickness: 0.5, color: AppColors.border),
+        Divider(height: 0.5, thickness: 0.5, color: context.borderColor),
 
         // ── Tag / Location options ───────────────────────────────────
         _CaptionOption(
@@ -642,16 +730,16 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
           label: 'Tag people',
           onTap: () {},
         ),
-        const Divider(height: 0.5, thickness: 0.5, color: AppColors.border),
+        Divider(height: 0.5, thickness: 0.5, color: context.borderColor),
         if (_location != null)
           _CaptionOption(
             icon: Icons.location_on,
             label: _location!,
             trailing: IconButton(
-              icon: const Icon(
+              icon: Icon(
                 Icons.close,
                 size: 18,
-                color: AppColors.textSecondary,
+                color: context.textSecondaryColor,
               ),
               onPressed: () => setState(() => _location = null),
             ),
@@ -663,16 +751,16 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
             label: 'Add location',
             onTap: _pickLocation,
           ),
-        const Divider(height: 0.5, thickness: 0.5, color: AppColors.border),
+        Divider(height: 0.5, thickness: 0.5, color: context.borderColor),
         if (_music != null)
           _CaptionOption(
             icon: Icons.music_note,
             label: _music!,
             trailing: IconButton(
-              icon: const Icon(
+              icon: Icon(
                 Icons.close,
                 size: 18,
-                color: AppColors.textSecondary,
+                color: context.textSecondaryColor,
               ),
               onPressed: () => setState(() {
                 _music = null;
@@ -687,7 +775,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
             label: 'Add music',
             onTap: _pickMusic,
           ),
-        const Divider(height: 0.5, thickness: 0.5, color: AppColors.border),
+        Divider(height: 0.5, thickness: 0.5, color: context.borderColor),
       ],
     );
   }
@@ -767,20 +855,20 @@ class _HeaderChip extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
-          color: AppColors.background,
+          color: context.backgroundColor,
           borderRadius: BorderRadius.circular(20),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 16, color: AppColors.textPrimary),
+            Icon(icon, size: 16, color: context.textPrimaryColor),
             const SizedBox(width: 4),
             Text(
               label,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w500,
-                color: AppColors.textPrimary,
+                color: context.textPrimaryColor,
               ),
             ),
           ],
@@ -807,11 +895,11 @@ class _GalleryThumbnail extends StatelessWidget {
           final data = snapshot.data;
           if (data == null) {
             return Container(
-              color: AppColors.background,
+              color: context.backgroundColor,
               alignment: Alignment.center,
               child: Icon(
                 isVideo ? Icons.movie_outlined : Icons.image_outlined,
-                color: AppColors.textSecondary,
+                color: context.textSecondaryColor,
               ),
             );
           }
@@ -901,22 +989,19 @@ class _CaptionOption extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         child: Row(
           children: [
-            Icon(icon, size: 22, color: AppColors.textPrimary),
+            Icon(icon, size: 22, color: context.textPrimaryColor),
             const SizedBox(width: 14),
             Expanded(
               child: Text(
                 label,
-                style: const TextStyle(
-                  fontSize: 15,
-                  color: AppColors.textPrimary,
-                ),
+                style: TextStyle(fontSize: 15, color: context.textPrimaryColor),
               ),
             ),
             trailing ??
-                const Icon(
+                Icon(
                   Icons.chevron_right,
                   size: 22,
-                  color: AppColors.textSecondary,
+                  color: context.textSecondaryColor,
                 ),
           ],
         ),

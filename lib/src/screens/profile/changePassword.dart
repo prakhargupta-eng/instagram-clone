@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../adaptive_colors.dart';
 import 'package:instagram_clone/src/compontes/auth_text_field.dart';
 import 'package:instagram_clone/src/utils/validation.dart';
 import '../../services/auth_service.dart';
@@ -73,7 +74,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
     return GestureDetector(
       onTap: () => FocusScope.of(context).unfocus(),
       child: Scaffold(
-        backgroundColor: AppColors.surface,
+        backgroundColor: context.surfaceColor,
 
         appBar: AppBar(title: const Text('Change Password')),
 
@@ -171,10 +172,10 @@ class _PasswordFieldState extends State<_PasswordField> {
           padding: const EdgeInsets.only(bottom: 8),
           child: Text(
             widget.labelText,
-            style: const TextStyle(
+            style:  TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w500,
-              color: AppColors.textPrimary,
+              color: context.textPrimaryColor,
             ),
           ),
         ),

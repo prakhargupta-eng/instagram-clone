@@ -7,6 +7,7 @@ import '../models/story.dart';
 class SqlDatabaseHelper {
   static final SqlDatabaseHelper instance = SqlDatabaseHelper._init();
   static Database? _database;
+  static bool isTesting = false;
 
   SqlDatabaseHelper._init();
 
@@ -16,15 +17,104 @@ class SqlDatabaseHelper {
     return _database!;
   }
 
+  /// Closes and forgets the cached database so tests start fresh.
+  Future<void> closeForTesting() async {
+    final db = _database;
+    _database = null;
+    if (db != null && db.isOpen) {
+      await db.close();
+    }
+  }
+
   Future<Database> _initDB(String filePath) async {
+    if (isTesting) {
+      return await openDatabase(
+        inMemoryDatabasePath,
+        version: 2,
+        onCreate: _createDB,
+      );
+    }
     final dbPath = await getDatabasesPath();
     final path = join(dbPath, filePath);
 
     return await openDatabase(
       path,
-      version: 1,
+      version: 2,
       onCreate: _createDB,
+      onUpgrade: _onUpgrade,
+      onOpen: (db) async {
+        await _cleanExistingVideoUrls(db);
+      },
     );
+  }
+
+  Future<void> _cleanExistingVideoUrls(Database db) async {
+    try {
+      final List<Map<String, dynamic>> maps = await db.query('posts');
+      for (final map in maps) {
+        final String videoUrl = map['videoUrl'] as String? ?? '';
+        final String imageUrl = map['imageUrl'] as String? ?? '';
+
+        bool needsUpdate = false;
+        final updatedMap = <String, dynamic>{};
+
+        if (videoUrl.contains('?') || videoUrl.startsWith('file://')) {
+          var cleanVideoUrl = videoUrl;
+          if (cleanVideoUrl.contains('?')) {
+            cleanVideoUrl = cleanVideoUrl.split('?').first;
+          }
+          if (cleanVideoUrl.startsWith('file://')) {
+            try {
+              cleanVideoUrl = Uri.parse(cleanVideoUrl).toFilePath();
+            } catch (_) {}
+          }
+          updatedMap['videoUrl'] = cleanVideoUrl;
+          needsUpdate = true;
+        }
+
+        if (imageUrl.contains('?') || imageUrl.startsWith('file://')) {
+          var cleanImageUrl = imageUrl;
+          if (cleanImageUrl.contains('?')) {
+            cleanImageUrl = cleanImageUrl.split('?').first;
+          }
+          if (cleanImageUrl.startsWith('file://')) {
+            try {
+              cleanImageUrl = Uri.parse(cleanImageUrl).toFilePath();
+            } catch (_) {}
+          }
+          updatedMap['imageUrl'] = cleanImageUrl;
+          needsUpdate = true;
+        }
+
+        if (needsUpdate) {
+          await db.update(
+            'posts',
+            updatedMap,
+            where: 'id = ?',
+            whereArgs: [map['id']],
+          );
+        }
+      }
+    } catch (e) {
+      print('Error cleaning existing video URLs: $e');
+    }
+  }
+
+  Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 2) {
+      await db.execute(
+        'ALTER TABLE posts ADD COLUMN filterIndex INTEGER DEFAULT 0',
+      );
+      await db.execute(
+        'ALTER TABLE posts ADD COLUMN brightness REAL DEFAULT 0.0',
+      );
+      await db.execute(
+        'ALTER TABLE posts ADD COLUMN contrast REAL DEFAULT 1.0',
+      );
+      await db.execute(
+        'ALTER TABLE posts ADD COLUMN saturation REAL DEFAULT 1.0',
+      );
+    }
   }
 
   Future<void> _createDB(Database db, int version) async {
@@ -73,7 +163,11 @@ class SqlDatabaseHelper {
         music TEXT,
         musicPreviewUrl TEXT,
         createdAt TEXT NOT NULL,
-        isVideo INTEGER DEFAULT 0
+        isVideo INTEGER DEFAULT 0,
+        filterIndex INTEGER DEFAULT 0,
+        brightness REAL DEFAULT 0.0,
+        contrast REAL DEFAULT 1.0,
+        saturation REAL DEFAULT 1.0
       )
     ''');
 
@@ -133,38 +227,37 @@ class SqlDatabaseHelper {
         isVideo INTEGER DEFAULT 0
       )
     ''');
+
+    // 10. Watched stories table
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS watched_stories (
+        story_id TEXT PRIMARY KEY
+      )
+    ''');
   }
 
   // ── User Operations ───────────────────────────────────────────────────────
 
   Future<void> insertUser(AppUser user) async {
     final db = await database;
-    await db.insert(
-      'users',
-      {
-        'id': user.id,
-        'username': user.username,
-        'fullName': user.fullName,
-        'email': user.email,
-        'bio': user.bio,
-        'avatarUrl': user.avatarUrl,
-        'following': user.following,
-        'followers': user.followers,
-        'isPrivate': user.isPrivate ? 1 : 0,
-        'website': user.website,
-        'gender': user.gender,
-      },
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
+    await db.insert('users', {
+      'id': user.id,
+      'username': user.username,
+      'fullName': user.fullName,
+      'email': user.email,
+      'bio': user.bio,
+      'avatarUrl': user.avatarUrl,
+      'following': user.following,
+      'followers': user.followers,
+      'isPrivate': user.isPrivate ? 1 : 0,
+      'website': user.website,
+      'gender': user.gender,
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
   Future<AppUser?> getUser(String id) async {
     final db = await database;
-    final maps = await db.query(
-      'users',
-      where: 'id = ?',
-      whereArgs: [id],
-    );
+    final maps = await db.query('users', where: 'id = ?', whereArgs: [id]);
 
     if (maps.isNotEmpty) {
       final map = maps.first;
@@ -207,25 +300,17 @@ class SqlDatabaseHelper {
 
   Future<void> deleteUser(String id) async {
     final db = await database;
-    await db.delete(
-      'users',
-      where: 'id = ?',
-      whereArgs: [id],
-    );
+    await db.delete('users', where: 'id = ?', whereArgs: [id]);
   }
 
   // ── Credentials Operations ────────────────────────────────────────────────
 
   Future<void> setPassword(String email, String password) async {
     final db = await database;
-    await db.insert(
-      'credentials',
-      {
-        'email': email.toLowerCase(),
-        'password': password,
-      },
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
+    await db.insert('credentials', {
+      'email': email.toLowerCase(),
+      'password': password,
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
   Future<String?> getPassword(String email) async {
@@ -269,14 +354,10 @@ class SqlDatabaseHelper {
 
   Future<void> saveSession(String userId) async {
     final db = await database;
-    await db.insert(
-      'session',
-      {
-        'id': 'current_session',
-        'user_id': userId,
-      },
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
+    await db.insert('session', {
+      'id': 'current_session',
+      'user_id': userId,
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
   Future<String?> getSessionUserId() async {
@@ -295,28 +376,49 @@ class SqlDatabaseHelper {
 
   Future<void> clearSession() async {
     final db = await database;
-    await db.delete(
-      'session',
-      where: 'id = ?',
-      whereArgs: ['current_session'],
-    );
+    await db.delete('session', where: 'id = ?', whereArgs: ['current_session']);
   }
 
   // ── Post Operations ───────────────────────────────────────────────────────
 
   Future<void> insertPost(Post post) async {
     final db = await database;
+
+    var cleanImageUrl = post.imageUrl;
+    if (cleanImageUrl.contains('?')) {
+      cleanImageUrl = cleanImageUrl.split('?').first;
+    }
+    if (cleanImageUrl.startsWith('file://')) {
+      try {
+        cleanImageUrl = Uri.parse(cleanImageUrl).toFilePath();
+      } catch (_) {}
+    }
+
+    var cleanVideoUrl = post.videoUrl;
+    if (cleanVideoUrl.contains('?')) {
+      cleanVideoUrl = cleanVideoUrl.split('?').first;
+    }
+    if (cleanVideoUrl.startsWith('file://')) {
+      try {
+        cleanVideoUrl = Uri.parse(cleanVideoUrl).toFilePath();
+      } catch (_) {}
+    }
+
     final postMap = {
       'id': post.id,
       'author_id': post.author.id,
-      'imageUrl': post.imageUrl,
-      'videoUrl': post.videoUrl,
+      'imageUrl': cleanImageUrl,
+      'videoUrl': cleanVideoUrl,
       'caption': post.caption,
       'location': post.location,
       'music': post.music,
       'musicPreviewUrl': post.musicPreviewUrl,
       'createdAt': post.createdAt.toIso8601String(),
       'isVideo': post.isVideo ? 1 : 0,
+      'filterIndex': post.filterIndex,
+      'brightness': post.brightness,
+      'contrast': post.contrast,
+      'saturation': post.saturation,
     };
     print('DB Insert Post: $postMap');
     await db.insert(
@@ -329,11 +431,10 @@ class SqlDatabaseHelper {
 
     await db.delete('likes', where: 'post_id = ?', whereArgs: [post.id]);
     for (final userId in post.likedBy) {
-      await db.insert(
-        'likes',
-        {'post_id': post.id, 'user_id': userId},
-        conflictAlgorithm: ConflictAlgorithm.ignore,
-      );
+      await db.insert('likes', {
+        'post_id': post.id,
+        'user_id': userId,
+      }, conflictAlgorithm: ConflictAlgorithm.ignore);
     }
 
     for (final comment in post.comments) {
@@ -378,6 +479,10 @@ class SqlDatabaseHelper {
           likedBy: likedBy,
           comments: comments,
           isVideo: (map['isVideo'] as int? ?? 0) == 1,
+          filterIndex: map['filterIndex'] as int? ?? 0,
+          brightness: (map['brightness'] as num? ?? 0.0).toDouble(),
+          contrast: (map['contrast'] as num? ?? 1.0).toDouble(),
+          saturation: (map['saturation'] as num? ?? 1.0).toDouble(),
         ),
       );
     }
@@ -395,11 +500,10 @@ class SqlDatabaseHelper {
 
   Future<void> addLike(String postId, String userId) async {
     final db = await database;
-    await db.insert(
-      'likes',
-      {'post_id': postId, 'user_id': userId},
-      conflictAlgorithm: ConflictAlgorithm.ignore,
-    );
+    await db.insert('likes', {
+      'post_id': postId,
+      'user_id': userId,
+    }, conflictAlgorithm: ConflictAlgorithm.ignore);
   }
 
   Future<void> removeLike(String postId, String userId) async {
@@ -415,17 +519,13 @@ class SqlDatabaseHelper {
 
   Future<void> insertComment(String postId, Comment comment) async {
     final db = await database;
-    await db.insert(
-      'comments',
-      {
-        'id': comment.id,
-        'post_id': postId,
-        'author_id': comment.author.id,
-        'text': comment.text,
-        'createdAt': comment.createdAt.toIso8601String(),
-      },
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
+    await db.insert('comments', {
+      'id': comment.id,
+      'post_id': postId,
+      'author_id': comment.author.id,
+      'text': comment.text,
+      'createdAt': comment.createdAt.toIso8601String(),
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
     await insertUser(comment.author);
   }
 
@@ -460,18 +560,14 @@ class SqlDatabaseHelper {
 
   Future<void> insertStory(Story story) async {
     final db = await database;
-    await db.insert(
-      'stories',
-      {
-        'id': story.id,
-        'user_id': story.user.id,
-        'imageUrl': story.imageUrl,
-        'isVideo': story.isVideo ? 1 : 0,
-        'durationSeconds': story.duration.inSeconds,
-        'createdAt': story.createdAt.toIso8601String(),
-      },
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
+    await db.insert('stories', {
+      'id': story.id,
+      'user_id': story.user.id,
+      'imageUrl': story.imageUrl,
+      'isVideo': story.isVideo ? 1 : 0,
+      'durationSeconds': story.duration.inSeconds,
+      'createdAt': story.createdAt.toIso8601String(),
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
     await insertUser(story.user);
   }
 
@@ -499,18 +595,37 @@ class SqlDatabaseHelper {
     return stories;
   }
 
+  Future<void> markStoryAsWatched(String storyId) async {
+    final db = await database;
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS watched_stories (
+        story_id TEXT PRIMARY KEY
+      )
+    ''');
+    await db.insert('watched_stories', {
+      'story_id': storyId,
+    }, conflictAlgorithm: ConflictAlgorithm.ignore);
+  }
+
+  Future<Set<String>> getWatchedStoryIds() async {
+    final db = await database;
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS watched_stories (
+        story_id TEXT PRIMARY KEY
+      )
+    ''');
+    final maps = await db.query('watched_stories');
+    return maps.map((m) => m['story_id'] as String).toSet();
+  }
+
   // ── Follow Operations ────────────────────────────────────────────────────
 
   Future<void> insertFollow(String followerId, String followingId) async {
     final db = await database;
-    await db.insert(
-      'follows',
-      {
-        'follower_id': followerId,
-        'following_id': followingId,
-      },
-      conflictAlgorithm: ConflictAlgorithm.ignore,
-    );
+    await db.insert('follows', {
+      'follower_id': followerId,
+      'following_id': followingId,
+    }, conflictAlgorithm: ConflictAlgorithm.ignore);
   }
 
   Future<void> deleteFollow(String followerId, String followingId) async {

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../adaptive_colors.dart';
 import '../../constants.dart';
 
 class ChatScreen extends StatelessWidget {
@@ -7,10 +8,10 @@ class ChatScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.surface,
+      backgroundColor: context.surfaceColor,
       appBar: AppBar(
-        backgroundColor: AppColors.surface,
-        foregroundColor: AppColors.textPrimary,
+        backgroundColor: context.surfaceColor,
+        foregroundColor: context.textPrimaryColor,
         elevation: 0,
         title: const Text(
           'Messages',
@@ -25,29 +26,29 @@ class ChatScreen extends StatelessWidget {
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                border: Border.all(color: AppColors.textPrimary, width: 2),
+                border: Border.all(color: context.textPrimaryColor, width: 2),
               ),
-              child: const Icon(
+              child:  Icon(
                 Icons.send_outlined,
                 size: 40,
-                color: AppColors.textPrimary,
+                color: context.textPrimaryColor,
               ),
             ),
             const SizedBox(height: 16),
-            const Text(
+             Text(
               'Chat Soon',
               style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.w700,
-                color: AppColors.textPrimary,
+                color: context.textPrimaryColor,
               ),
             ),
             const SizedBox(height: 8),
-            const Text(
+             Text(
               'Direct messaging is coming soon!',
               style: TextStyle(
                 fontSize: 14,
-                color: AppColors.textSecondary,
+                color: context.textSecondaryColor,
               ),
             ),
           ],

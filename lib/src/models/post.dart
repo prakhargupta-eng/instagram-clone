@@ -43,11 +43,15 @@ class Post {
   final List<String> likedBy;
   final List<Comment> comments;
   final bool isVideo;
+  final int filterIndex;
+  final double brightness;
+  final double contrast;
+  final double saturation;
 
   const Post({
     required this.id,
     required this.author,
-    required this.imageUrl,
+    this.imageUrl = '',
     required this.caption,
     required this.createdAt,
     this.videoUrl = '',
@@ -57,6 +61,10 @@ class Post {
     this.likedBy = const [],
     this.comments = const [],
     this.isVideo = false,
+    this.filterIndex = 0,
+    this.brightness = 0.0,
+    this.contrast = 1.0,
+    this.saturation = 1.0,
   });
 
   int get likes => likedBy.length;
@@ -79,6 +87,10 @@ class Post {
           .map((e) => Comment.fromJson(e as Map<String, dynamic>))
           .toList(),
       isVideo: json['isVideo'] ?? false,
+      filterIndex: json['filterIndex'] ?? 0,
+      brightness: (json['brightness'] as num?)?.toDouble() ?? 0.0,
+      contrast: (json['contrast'] as num?)?.toDouble() ?? 1.0,
+      saturation: (json['saturation'] as num?)?.toDouble() ?? 1.0,
     );
   }
 
@@ -95,6 +107,10 @@ class Post {
         'likedBy': likedBy,
         'comments': comments.map((c) => c.toJson()).toList(),
         'isVideo': isVideo,
+        'filterIndex': filterIndex,
+        'brightness': brightness,
+        'contrast': contrast,
+        'saturation': saturation,
       };
 
   Post copyWith({
@@ -107,6 +123,10 @@ class Post {
     List<Comment>? comments,
     String? videoUrl,
     bool? isVideo,
+    int? filterIndex,
+    double? brightness,
+    double? contrast,
+    double? saturation,
   }) {
     return Post(
       id: id,
@@ -121,6 +141,10 @@ class Post {
       likedBy: likedBy ?? this.likedBy,
       comments: comments ?? this.comments,
       isVideo: isVideo ?? this.isVideo,
+      filterIndex: filterIndex ?? this.filterIndex,
+      brightness: brightness ?? this.brightness,
+      contrast: contrast ?? this.contrast,
+      saturation: saturation ?? this.saturation,
     );
   }
 }

@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:audioplayers/audioplayers.dart';
+import 'package:instagram_clone/src/adaptive_colors.dart';
 import '../../constants.dart';
 import '../../services/music_service.dart';
 
@@ -144,10 +145,10 @@ class _MusicPickerScreenState extends State<MusicPickerScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.surface,
+      backgroundColor: context.surfaceColor,
       appBar: AppBar(
-        backgroundColor: AppColors.surface,
-        foregroundColor: AppColors.textPrimary,
+        backgroundColor: context.surfaceColor,
+        foregroundColor: context.textPrimaryColor,
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.close),
@@ -156,9 +157,13 @@ class _MusicPickerScreenState extends State<MusicPickerScreen> {
             Navigator.of(context).pop();
           },
         ),
-        title: const Text(
+        title: Text(
           'Select Music',
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            color: context.textPrimaryColor,
+          ),
         ),
         actions: [
           if (_selectedSong != null)
@@ -178,13 +183,22 @@ class _MusicPickerScreenState extends State<MusicPickerScreen> {
               child: TextField(
                 controller: _controller,
                 onChanged: _searchMusic,
+                style: TextStyle(color: context.textPrimaryColor),
                 textInputAction: TextInputAction.search,
                 decoration: InputDecoration(
                   hintText: 'Search for music',
-                  prefixIcon: const Icon(Icons.search),
+                  hintStyle: TextStyle(color: context.textSecondaryColor),
+                  prefixIcon: Icon(
+                    Icons.search,
+                    color: context.textSecondaryColor,
+                  ),
                   suffixIcon: _controller.text.isNotEmpty
                       ? IconButton(
-                          icon: const Icon(Icons.clear, size: 18),
+                          icon: Icon(
+                            Icons.clear,
+                            size: 18,
+                            color: context.textSecondaryColor,
+                          ),
                           onPressed: () {
                             _controller.clear();
                             _searchMusic('');
@@ -192,7 +206,7 @@ class _MusicPickerScreenState extends State<MusicPickerScreen> {
                         )
                       : null,
                   filled: true,
-                  fillColor: AppColors.background,
+                  fillColor: context.backgroundColor,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),
                     borderSide: BorderSide.none,
@@ -225,8 +239,8 @@ class _MusicPickerScreenState extends State<MusicPickerScreen> {
                         Text(
                           _errorMessage!,
                           textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            color: AppColors.textSecondary,
+                          style: TextStyle(
+                            color: context.textSecondaryColor,
                             fontSize: 13,
                           ),
                         ),
@@ -269,8 +283,12 @@ class _MusicPickerScreenState extends State<MusicPickerScreen> {
                                 errorWidget: (_, __, ___) => Container(
                                   width: 40,
                                   height: 40,
-                                  color: AppColors.border,
-                                  child: const Icon(Icons.music_note, size: 20),
+                                  color: context.borderColor,
+                                  child: Icon(
+                                    Icons.music_note,
+                                    size: 20,
+                                    color: context.textSecondaryColor,
+                                  ),
                                 ),
                               ),
                             )
@@ -278,27 +296,32 @@ class _MusicPickerScreenState extends State<MusicPickerScreen> {
                               width: 40,
                               height: 40,
                               decoration: BoxDecoration(
-                                color: AppColors.border,
+                                color: context.borderColor,
                                 borderRadius: BorderRadius.circular(4),
                               ),
-                              child: const Icon(Icons.music_note, size: 20),
+                              child: Icon(
+                                Icons.music_note,
+                                size: 20,
+                                color: context.textSecondaryColor,
+                              ),
                             ),
                       title: Text(
                         trackName,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w600,
+                          color: context.textPrimaryColor,
                         ),
                       ),
                       subtitle: Text(
                         artistName,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 12,
-                          color: AppColors.textSecondary,
+                          color: context.textSecondaryColor,
                         ),
                       ),
                       trailing: Row(
@@ -312,7 +335,7 @@ class _MusicPickerScreenState extends State<MusicPickerScreen> {
                                     : Icons.play_circle_filled,
                                 color: isSelected
                                     ? AppColors.primary
-                                    : AppColors.textSecondary,
+                                    : context.textSecondaryColor,
                                 size: 28,
                               ),
                               onPressed: () {
@@ -348,11 +371,11 @@ class _MusicPickerScreenState extends State<MusicPickerScreen> {
                 ),
               )
             else
-              const Expanded(
+              Expanded(
                 child: Center(
                   child: Text(
                     'No songs found',
-                    style: TextStyle(color: AppColors.textSecondary),
+                    style: TextStyle(color: context.textSecondaryColor),
                   ),
                 ),
               ),

@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:skeletonizer/skeletonizer.dart';
+import '../../adaptive_colors.dart';
+import '../../app.dart';
 
 import '../../constants.dart';
 import '../../models/post.dart';
@@ -62,6 +65,7 @@ class _ProfileScreenState extends State<ProfileScreen>
   Widget build(BuildContext context) {
     final listenable = Listenable.merge([feedService, widget.authService]);
     return Scaffold(
+      backgroundColor: context.surfaceColor,
       appBar: AppBar(
         title: AnimatedBuilder(
           animation: listenable,
@@ -71,12 +75,12 @@ class _ProfileScreenState extends State<ProfileScreen>
               mainAxisSize: MainAxisSize.min,
               children: [
                 if (displayUser.isPrivate)
-                  const Padding(
+                  Padding(
                     padding: EdgeInsets.only(right: 6),
                     child: Icon(
                       Icons.lock_outline,
                       size: 16,
-                      color: AppColors.textPrimary,
+                      color: context.textPrimaryColor,
                     ),
                   ),
                 Text(
@@ -111,164 +115,173 @@ class _ProfileScreenState extends State<ProfileScreen>
                   widget.authService!.currentUser!.id,
                   displayUser.id,
                 );
-          return ListView(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            children: [
-              const SizedBox(height: 8),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Avatar(url: displayUser.avatarUrl, radius: 40),
-                  const SizedBox(width: 24),
-                  Expanded(
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceAround,
-                      children: [
-                        Stat(label: formatCount(posts.length), value: 'Posts'),
-                        Stat(
-                          label: formatCount(liveUser.followers),
-                          value: 'Followers',
-                        ),
-                        Stat(
-                          label: formatCount(liveUser.following),
-                          value: 'Following',
-                        ),
-                      ],
+          final isLoading = feedService.isLoading;
+
+          return Skeletonizer(
+            enabled: isLoading,
+            enableSwitchAnimation: true,
+            child: ListView(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              children: [
+                const SizedBox(height: 8),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Avatar(url: displayUser.avatarUrl, radius: 40),
+                    const SizedBox(width: 24),
+                    Expanded(
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceAround,
+                        children: [
+                          Stat(
+                            label: formatCount(posts.length),
+                            value: 'Posts',
+                          ),
+                          Stat(
+                            label: formatCount(liveUser.followers),
+                            value: 'Followers',
+                          ),
+                          Stat(
+                            label: formatCount(liveUser.following),
+                            value: 'Following',
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  displayUser.fullName,
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+                if (displayUser.bio.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    displayUser.bio,
+                    style: TextStyle(color: context.textSecondaryColor),
+                  ),
+                ],
+                if (displayUser.website.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  GestureDetector(
+                    onTap: () {
+                      ToastHelper.showToast(
+                        context,
+                        "Opening: ${displayUser.website}",
+                      );
+                    },
+                    child: Text(
+                      displayUser.website,
+                      style: const TextStyle(
+                        color: Colors.blue,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
                   ),
                 ],
-              ),
-              const SizedBox(height: 12),
-              Text(
-                displayUser.fullName,
-                style: const TextStyle(fontWeight: FontWeight.w600),
-              ),
-              if (displayUser.bio.isNotEmpty) ...[
-                const SizedBox(height: 2),
-                Text(
-                  displayUser.bio,
-                  style: const TextStyle(color: AppColors.textSecondary),
-                ),
-              ],
-              if (displayUser.website.isNotEmpty) ...[
-                const SizedBox(height: 4),
-                GestureDetector(
-                  onTap: () {
-                    ToastHelper.showToast(
-                      context,
-                      "Opening: ${displayUser.website}",
-                    );
-                  },
-                  child: Text(
-                    displayUser.website,
-                    style: const TextStyle(
-                      color: Colors.blue,
-                      fontWeight: FontWeight.w500,
+                const SizedBox(height: 12),
+                if (_isCurrentUser)
+                  Row(
+                    children: [
+                      Expanded(
+                        child: SizedBox(
+                          height: 32,
+                          child: OutlinedButton(
+                            onPressed: () => _openEditProfile(context),
+                            style: OutlinedButton.styleFrom(
+                              side: BorderSide(
+                                color: context.borderColor,
+                                width: 0.8,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              padding: EdgeInsets.zero,
+                            ),
+                            child: Text(
+                              'Edit profile',
+                              style: TextStyle(
+                                color: context.textPrimaryColor,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: SizedBox(
+                          height: 32,
+                          child: OutlinedButton(
+                            onPressed: () {
+                              ToastHelper.showToast(
+                                context,
+                                "Profile link copied",
+                              );
+                            },
+                            style: OutlinedButton.styleFrom(
+                              side: BorderSide(
+                                color: context.borderColor,
+                                width: 0.8,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              padding: EdgeInsets.zero,
+                            ),
+                            child: Text(
+                              'Share profile',
+                              style: TextStyle(
+                                color: context.textPrimaryColor,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  )
+                else
+                  SizedBox(
+                    height: 32,
+                    child: OutlinedButton(
+                      onPressed: () => _toggleFollow(context),
+                      style: OutlinedButton.styleFrom(
+                        side: BorderSide(
+                          color: context.borderColor,
+                          width: 0.8,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                      ),
+                      child: Text(
+                        _buttonLabel(isFollowing),
+                        style: TextStyle(
+                          color: context.textPrimaryColor,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                     ),
                   ),
-                ),
-              ],
-              const SizedBox(height: 12),
-              if (_isCurrentUser)
-                Row(
-                  children: [
-                    Expanded(
-                      child: SizedBox(
-                        height: 32,
-                        child: OutlinedButton(
-                          onPressed: () => _openEditProfile(context),
-                          style: OutlinedButton.styleFrom(
-                            side: const BorderSide(
-                              color: AppColors.border,
-                              width: 0.8,
-                            ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            padding: EdgeInsets.zero,
-                          ),
-                          child: const Text(
-                            'Edit profile',
-                            style: TextStyle(
-                              color: AppColors.textPrimary,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 13,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: SizedBox(
-                        height: 32,
-                        child: OutlinedButton(
-                          onPressed: () {
-                            ToastHelper.showToast(
-                              context,
-                              "Profile link copied",
-                            );
-                          },
-                          style: OutlinedButton.styleFrom(
-                            side: const BorderSide(
-                              color: AppColors.border,
-                              width: 0.8,
-                            ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            padding: EdgeInsets.zero,
-                          ),
-                          child: const Text(
-                            'Share profile',
-                            style: TextStyle(
-                              color: AppColors.textPrimary,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 13,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                )
-              else
+                const SizedBox(height: 12),
+                _buildTabBar(),
                 SizedBox(
-                  height: 32,
-                  child: OutlinedButton(
-                    onPressed: () => _toggleFollow(context),
-                    style: OutlinedButton.styleFrom(
-                      side: const BorderSide(
-                        color: AppColors.border,
-                        width: 0.8,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                    ),
-                    child: Text(
-                      _buttonLabel(isFollowing),
-                      style: const TextStyle(
-                        color: AppColors.textPrimary,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
+                  height: 420,
+                  child: TabBarView(
+                    controller: _tabController,
+                    children: [
+                      _buildPostsTab(posts),
+                      _buildReelsTab(posts),
+                      _buildTaggedTab(),
+                    ],
                   ),
                 ),
-              const SizedBox(height: 12),
-              _buildTabBar(),
-              SizedBox(
-                height: 420,
-                child: TabBarView(
-                  controller: _tabController,
-                  children: [
-                    _buildPostsTab(posts),
-                    _buildReelsTab(posts),
-                    _buildTaggedTab(),
-                  ],
-                ),
-              ),
-            ],
+              ],
+            ),
           );
         },
       ),
@@ -277,14 +290,16 @@ class _ProfileScreenState extends State<ProfileScreen>
 
   Widget _buildTabBar() {
     return Container(
-      decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: AppColors.border, width: 0.5)),
+      decoration: BoxDecoration(
+        border: Border(
+          bottom: BorderSide(color: context.borderColor, width: 0.5),
+        ),
       ),
       child: TabBar(
         controller: _tabController,
-        indicatorColor: AppColors.textPrimary,
-        labelColor: AppColors.textPrimary,
-        unselectedLabelColor: AppColors.textSecondary,
+        indicatorColor: context.textPrimaryColor,
+        labelColor: context.textPrimaryColor,
+        unselectedLabelColor: context.textSecondaryColor,
         tabs: const [
           Tab(icon: Icon(Icons.grid_on_outlined, size: 22)),
           Tab(icon: Icon(Icons.play_circle_outline, size: 22)),
@@ -371,7 +386,7 @@ class _ProfileScreenState extends State<ProfileScreen>
               height: 4,
               margin: const EdgeInsets.symmetric(vertical: 10),
               decoration: BoxDecoration(
-                color: AppColors.border,
+                color: context.borderColor,
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -385,6 +400,47 @@ class _ProfileScreenState extends State<ProfileScreen>
 
   List<Widget> _accountMenuItems(BuildContext ctx) {
     return [
+      ListenableBuilder(
+        listenable: AppScope.of(ctx).themeService,
+        builder: (context, _) {
+          final themeService = AppScope.of(ctx).themeService;
+          final isDark = themeService.isDarkMode;
+          return ListTile(
+            leading: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 450),
+              switchInCurve: Curves.easeOutBack,
+              switchOutCurve: Curves.easeIn,
+              transitionBuilder: (Widget child, Animation<double> animation) {
+                return RotationTransition(
+                  turns: Tween<double>(begin: 0.5, end: 1.0).animate(animation),
+                  child: ScaleTransition(
+                    scale: Tween<double>(
+                      begin: 0.5,
+                      end: 1.0,
+                    ).animate(animation),
+                    child: FadeTransition(opacity: animation, child: child),
+                  ),
+                );
+              },
+              child: Icon(
+                isDark ? Icons.dark_mode_rounded : Icons.light_mode_rounded,
+                key: ValueKey<bool>(isDark),
+                color: isDark ? Colors.amber : Colors.orangeAccent,
+              ),
+            ),
+            title: const Text(
+              'Dark Mode',
+              style: TextStyle(fontWeight: FontWeight.w500),
+            ),
+            trailing: Switch(
+              value: isDark,
+              onChanged: (val) {
+                themeService.toggleTheme();
+              },
+            ),
+          );
+        },
+      ),
       ListTile(
         leading: const Icon(Icons.password),
         title: const Text(

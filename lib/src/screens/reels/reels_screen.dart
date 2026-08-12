@@ -1,14 +1,15 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart' as video;
 import 'package:instagram_clone/src/compontes/ToastHelper.dart';
 
 import '../../app.dart';
+import '../../constants.dart';
 import '../../models/post.dart';
 import '../../models/user.dart';
 import '../../services/feed_service.dart';
-import '../../services/local_post_store.dart';
+import '../../services/video_cache_service.dart';
 import '../../widgets/avatar.dart';
+import '../../widgets/shader_filter_widget.dart';
 import '../home/comments_sheet.dart';
 
 class ReelsScreen extends StatefulWidget {
@@ -62,13 +63,14 @@ class _ReelsScreenState extends State<ReelsScreen> {
                   : PageView.builder(
                       controller: _controller,
                       scrollDirection: Axis.vertical,
-                      itemCount: reels.length,
+                      itemCount: null,
                       onPageChanged: (index) =>
                           setState(() => _currentPage = index),
                       itemBuilder: (context, index) {
-                        final post = reels[index];
+                        final reelIndex = index % reels.length;
+                        final post = reels[reelIndex];
                         return ReelItem(
-                          key: ValueKey(post.id),
+                          key: ValueKey('${post.id}-$index'),
                           post: post,
                           currentUser: widget.currentUser,
                           feedService: widget.feedService,
@@ -123,9 +125,10 @@ class ReelItem extends StatefulWidget {
 
 class _ReelItemState extends State<ReelItem>
     with RouteAware, TickerProviderStateMixin {
-  late final video.VideoPlayerController _videoController;
+  video.VideoPlayerController? _videoController;
   bool _initialized = false;
   bool _playbackFailed = false;
+  String? _videoInitId;
 
   late final AnimationController _rotationController;
   late final AnimationController _heartAnimationController;
@@ -135,10 +138,6 @@ class _ReelItemState extends State<ReelItem>
   @override
   void initState() {
     super.initState();
-    final path = widget.post.videoUrl;
-    _videoController = LocalPostStore.isLocalPath(path)
-        ? video.VideoPlayerController.file(File(path))
-        : video.VideoPlayerController.networkUrl(Uri.parse(path));
 
     _rotationController = AnimationController(
       vsync: this,
@@ -150,26 +149,48 @@ class _ReelItemState extends State<ReelItem>
       duration: const Duration(milliseconds: 700),
     );
 
-    _videoController.addListener(_videoListener);
+    _initVideo();
+  }
 
-    _videoController
-        .initialize()
-        .then((_) {
-          if (!mounted) return;
-          _videoController.setLooping(true);
-          setState(() => _initialized = true);
-          if (widget.active) _play();
-        })
-        .catchError((error) {
-          debugPrint('ReelItem video init error: $error');
-          if (!mounted) return;
-          setState(() => _playbackFailed = true);
-        });
+  void _initVideo() async {
+    final path = widget.post.videoUrl;
+    if (path.isEmpty) return;
+
+    final String currentInitId = widget.post.id;
+    _videoInitId = currentInitId;
+
+    try {
+      final file = await VideoCacheService.instance.getFile(path);
+      if (_videoInitId != currentInitId || !mounted) return;
+
+      final controller = video.VideoPlayerController.file(file);
+      _videoController = controller;
+
+      controller.addListener(_videoListener);
+
+      await controller.initialize();
+      if (_videoInitId != currentInitId || !mounted) {
+        controller.removeListener(_videoListener);
+        controller.dispose();
+        if (_videoController == controller) {
+          _videoController = null;
+        }
+        return;
+      }
+
+      controller.setLooping(true);
+      setState(() => _initialized = true);
+      if (widget.active) _play();
+    } catch (error) {
+      debugPrint('ReelItem video init error: $error');
+      if (_videoInitId != currentInitId || !mounted) return;
+      setState(() => _playbackFailed = true);
+    }
   }
 
   void _videoListener() {
-    if (!mounted) return;
-    if (_videoController.value.isPlaying) {
+    if (!mounted || _videoController == null) return;
+    if (_videoController!.value.isPlaying) {
       if (!_rotationController.isAnimating) {
         _rotationController.repeat();
       }
@@ -179,9 +200,9 @@ class _ReelItemState extends State<ReelItem>
       }
     }
     setState(() {
-      _progress = _videoController.value.duration.inMilliseconds > 0
-          ? _videoController.value.position.inMilliseconds /
-                _videoController.value.duration.inMilliseconds
+      _progress = _videoController!.value.duration.inMilliseconds > 0
+          ? _videoController!.value.position.inMilliseconds /
+                _videoController!.value.duration.inMilliseconds
           : 0.0;
     });
   }
@@ -195,10 +216,22 @@ class _ReelItemState extends State<ReelItem>
   @override
   void didUpdateWidget(ReelItem oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.active && !oldWidget.active) {
-      _play();
-    } else if (!widget.active && oldWidget.active) {
-      _pause();
+    if (widget.post.videoUrl != oldWidget.post.videoUrl) {
+      _videoInitId = null;
+      _initialized = false;
+      _playbackFailed = false;
+      if (_videoController != null) {
+        _videoController!.removeListener(_videoListener);
+        _videoController!.dispose();
+        _videoController = null;
+      }
+      _initVideo();
+    } else {
+      if (widget.active && !oldWidget.active) {
+        _play();
+      } else if (!widget.active && oldWidget.active) {
+        _pause();
+      }
     }
   }
 
@@ -218,41 +251,45 @@ class _ReelItemState extends State<ReelItem>
 
   @override
   void dispose() {
+    _videoInitId = null;
     routeObserver.unsubscribe(this);
-    _videoController.removeListener(_videoListener);
-    _videoController.dispose();
+    if (_videoController != null) {
+      _videoController!.removeListener(_videoListener);
+      _videoController!.dispose();
+    }
     _rotationController.dispose();
     _heartAnimationController.dispose();
     super.dispose();
   }
 
   void _play() {
-    if (_initialized && !_playbackFailed) {
-      _videoController.play();
+    if (_initialized && !_playbackFailed && _videoController != null) {
+      _videoController!.play();
       _rotationController.repeat();
     }
   }
 
   void _pause() {
-    if (_initialized) {
-      _videoController.pause();
+    if (_initialized && _videoController != null) {
+      _videoController!.pause();
       _rotationController.stop();
     }
   }
 
   void _togglePlay() {
-    if (!_initialized || _playbackFailed) return;
-    if (_videoController.value.isPlaying) {
-      _videoController.pause();
+    if (!_initialized || _playbackFailed || _videoController == null) return;
+    if (_videoController!.value.isPlaying) {
+      _videoController!.pause();
       _rotationController.stop();
     } else {
-      _videoController.play();
+      _videoController!.play();
       _rotationController.repeat();
     }
   }
 
   void _onDoubleTap() {
     final post = widget.feedService.getPost(widget.post.id);
+    if (post == null) return;
     if (!post.isLikedBy(widget.currentUser.id)) {
       widget.feedService.toggleLike(widget.post.id, widget.currentUser.id);
     }
@@ -305,8 +342,19 @@ class _ReelItemState extends State<ReelItem>
       );
     }
     return SizedBox.expand(
-      child: _initialized
-          ? video.VideoPlayer(_videoController)
+      child: _initialized && _videoController != null
+          ? ShaderFilterWidget(
+              enabled: widget.post.filterIndex == 8,
+              child: ColorFiltered(
+                colorFilter: AppFilters.getCombinedFilter(
+                  widget.post.filterIndex,
+                  widget.post.brightness,
+                  widget.post.contrast,
+                  widget.post.saturation,
+                ),
+                child: video.VideoPlayer(_videoController!),
+              ),
+            )
           : Container(
               color: const Color(0xFF1A1A1A),
               child: const Center(
@@ -334,6 +382,7 @@ class _ReelItemState extends State<ReelItem>
       animation: widget.feedService,
       builder: (context, _) {
         final post = widget.feedService.getPost(widget.post.id);
+        if (post == null) return const SizedBox.shrink();
         final isLiked = post.isLikedBy(widget.currentUser.id);
         return Positioned(
           right: 8,
@@ -569,8 +618,9 @@ class _ReelItemState extends State<ReelItem>
   }
 
   Widget _buildPlayPauseCenter() {
+    if (_videoController == null) return const SizedBox.shrink();
     return ValueListenableBuilder<video.VideoPlayerValue>(
-      valueListenable: _videoController,
+      valueListenable: _videoController!,
       builder: (context, value, _) {
         return AnimatedOpacity(
           opacity: _initialized && !value.isPlaying ? 1 : 0,

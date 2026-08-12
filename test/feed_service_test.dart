@@ -6,11 +6,15 @@ import 'package:instagram_clone/src/services/feed_service.dart';
 import 'test_helper.dart';
 
 void main() {
+  late FeedService feed;
+
   setUp(() async {
     await setupTestHive();
+    feed = FeedService();
+    await feed.ensureLocalPostsLoaded(MockDatabase.alice);
   });
+
   test('addPost inserts at top of feed', () {
-    final feed = FeedService();
     final before = feed.posts.length;
     feed.addPost(
       Post(
@@ -26,28 +30,25 @@ void main() {
   });
 
   test('toggleLike adds and removes the current user', () {
-    final feed = FeedService();
     final post = feed.posts.first;
     expect(post.isLikedBy('uX'), isFalse);
 
     feed.toggleLike(post.id, 'uX');
-    expect(feed.getPost(post.id).isLikedBy('uX'), isTrue);
+    expect(feed.getPost(post.id)?.isLikedBy('uX'), isTrue);
 
     feed.toggleLike(post.id, 'uX');
-    expect(feed.getPost(post.id).isLikedBy('uX'), isFalse);
+    expect(feed.getPost(post.id)?.isLikedBy('uX'), isFalse);
   });
 
   test('addComment appends a comment', () {
-    final feed = FeedService();
     final post = feed.posts.first;
     feed.addComment(post.id, MockDatabase.alice, 'nice!');
     final updated = feed.getPost(post.id);
-    expect(updated.comments.length, post.comments.length + 1);
-    expect(updated.comments.last.text, 'nice!');
+    expect(updated?.comments.length, post.comments.length + 1);
+    expect(updated?.comments.last.text, 'nice!');
   });
 
   test('mock data contains video posts for reels', () {
-    final feed = FeedService();
     final reels = feed.posts.where((p) => p.isVideo).toList();
     expect(reels.length, greaterThan(0));
     for (final reel in reels) {
@@ -56,7 +57,6 @@ void main() {
   });
 
   test('followingFeed only shows posts from followed users', () {
-    final feed = FeedService();
     final alice = MockDatabase.alice;
     final followed = feed.followingIdsOf(alice.id);
     expect(followed, isNotEmpty);
@@ -69,14 +69,12 @@ void main() {
   });
 
   test('different users get different following feeds', () {
-    final feed = FeedService();
     final aliceFeed = feed.followingFeed(MockDatabase.alice).map((p) => p.id).toSet();
     final marcoFeed = feed.followingFeed(MockDatabase.marco).map((p) => p.id).toSet();
     expect(aliceFeed, isNot(equals(marcoFeed)));
   });
 
   test('toggleFollow adds and removes a follow', () {
-    final feed = FeedService();
     final alice = MockDatabase.alice;
     final zoe = MockDatabase.zoe;
 

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import '../../adaptive_colors.dart';
 import 'package:audioplayers/audioplayers.dart';
 import '../../app.dart';
 import '../../constants.dart';
@@ -208,10 +209,10 @@ class _DetailsScreenState extends State<DetailsScreen> with RouteAware {
     final activePost = _postList.isNotEmpty ? _postList[_currentIndex] : widget.post;
 
     return Scaffold(
-      backgroundColor: AppColors.surface,
+      backgroundColor: context.surfaceColor,
       appBar: AppBar(
-        backgroundColor: AppColors.surface,
-        foregroundColor: AppColors.textPrimary,
+        backgroundColor: context.surfaceColor,
+        foregroundColor: context.textPrimaryColor,
         elevation: 0,
         title: const Text(
           'Posts',
@@ -268,7 +269,7 @@ class _DetailsScreenState extends State<DetailsScreen> with RouteAware {
                         }
                       },
                     ),
-                    const Divider(height: 1, thickness: 0.5, color: AppColors.border),
+                    Divider(height: 1, thickness: 0.5, color: context.borderColor),
                   ],
                 ),
               );

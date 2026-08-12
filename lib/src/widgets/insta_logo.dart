@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../adaptive_colors.dart';
 
 import '../constants.dart';
 
@@ -28,9 +29,9 @@ class InstaLogo extends StatelessWidget {
               width: size,
               height: size,
               fit: BoxFit.cover,
-              errorBuilder: (_, _, _) => const Icon(
+              errorBuilder: (_, _, _) =>  Icon(
                 Icons.photo_camera_outlined,
-                color: AppColors.textSecondary,
+                color: context.textSecondaryColor,
                 size: 40,
               ),
             ),
@@ -42,7 +43,7 @@ class InstaLogo extends StatelessWidget {
             fontSize: size * 0.5,
             fontWeight: FontWeight.w300,
             letterSpacing: 1.2,
-            color: AppColors.textPrimary,
+            color: context.textPrimaryColor,
           ),
         ),
       ],

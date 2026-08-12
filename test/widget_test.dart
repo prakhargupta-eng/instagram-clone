@@ -11,8 +11,13 @@ void main() {
     
     await tester.runAsync(() async {
       await tester.pumpWidget(const InstaCloneApp());
-      await Future.delayed(const Duration(milliseconds: 100));
-      await tester.pump();
+      for (int i = 0; i < 20; i++) {
+        await Future.delayed(const Duration(milliseconds: 100));
+        await tester.pump();
+        if (find.text('Log In').evaluate().isNotEmpty) {
+          break;
+        }
+      }
     });
     
     expect(find.text('Log In'), findsOneWidget);

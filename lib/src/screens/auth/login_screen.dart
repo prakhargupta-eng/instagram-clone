@@ -1,6 +1,11 @@
 import 'package:flutter/material.dart';
+import '../../adaptive_colors.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:instagram_clone/src/compontes/auth_text_field.dart';
 
+import '../../blocs/auth/auth_bloc.dart';
+import '../../blocs/auth/auth_event.dart';
+import '../../blocs/auth/auth_state.dart';
 import '../../constants.dart';
 import '../../widgets/insta_logo.dart';
 import '../../services/auth_service.dart';
@@ -32,21 +37,17 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  Future<void> _submit() async {
+  void _submit() {
     if (!_formKey.currentState!.validate()) return;
     setState(() {
-      _loading = true;
       _error = null;
     });
-    final result = await widget.authService.login(
-      _emailController.text.trim(),
-      _passwordController.text,
+    context.read<AuthBloc>().add(
+      LoginRequested(
+        email: _emailController.text.trim(),
+        password: _passwordController.text,
+      ),
     );
-    if (!mounted) return;
-    setState(() {
-      _loading = false;
-      _error = result.error;
-    });
   }
 
   void _fillDemo(String email) {
@@ -63,73 +64,91 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () => FocusScope.of(context).unfocus(),
-      child: Scaffold(
-        backgroundColor: AppColors.surface,
-        body: SafeArea(
-          child: Center(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 32),
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const SizedBox(height: 24),
-                    const InstaLogo(),
-                    const SizedBox(height: 40),
-                    AuthTextField(
-                      controller: _emailController,
-                      hintText: AppStrings.email,
-                      keyboardType: TextInputType.emailAddress,
-                      onChanged: (_) => _clearServerError(),
-                      validator: Validators.validateEmail,
-                    ),
-                    const SizedBox(height: 10),
-                    AuthTextField(
-                      controller: _passwordController,
-                      hintText: AppStrings.password,
-                      obscureText: _obscure,
-                      onChanged: (_) => _clearServerError(),
-                      validator: Validators.validatePassword,
-                      suffixIcon: IconButton(
-                        icon: Icon(
-                          _obscure
-                              ? Icons.visibility_off_outlined
-                              : Icons.visibility_outlined,
-                          size: 20,
-                        ),
-                        onPressed: () => setState(() => _obscure = !_obscure),
+    return BlocListener<AuthBloc, AuthState>(
+      listener: (context, state) {
+        if (state is AuthLoading) {
+          setState(() {
+            _loading = true;
+          });
+        } else {
+          setState(() {
+            _loading = false;
+          });
+        }
+        if (state is AuthFailure) {
+          setState(() {
+            _error = state.error;
+          });
+        }
+      },
+      child: GestureDetector(
+        onTap: () => FocusScope.of(context).unfocus(),
+        child: Scaffold(
+          backgroundColor: context.surfaceColor,
+          body: SafeArea(
+            child: Center(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 32),
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const SizedBox(height: 24),
+                      const InstaLogo(),
+                      const SizedBox(height: 40),
+                      AuthTextField(
+                        controller: _emailController,
+                        hintText: AppStrings.email,
+                        keyboardType: TextInputType.emailAddress,
+                        onChanged: (_) => _clearServerError(),
+                        validator: Validators.validateEmail,
                       ),
-                      onFieldSubmitted: (_) => _submit(),
-                    ),
-                    if (_error != null) ...[
-                      const SizedBox(height: 8),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 4),
-                        child: Text(
-                          _error!,
-                          style: const TextStyle(
-                            color: AppColors.error,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
+                      const SizedBox(height: 10),
+                      AuthTextField(
+                        controller: _passwordController,
+                        hintText: AppStrings.password,
+                        obscureText: _obscure,
+                        onChanged: (_) => _clearServerError(),
+                        validator: Validators.validatePassword,
+                        suffixIcon: IconButton(
+                          icon: Icon(
+                            _obscure
+                                ? Icons.visibility_off_outlined
+                                : Icons.visibility_outlined,
+                            size: 20,
+                          ),
+                          onPressed: () => setState(() => _obscure = !_obscure),
+                        ),
+                        onFieldSubmitted: (_) => _submit(),
+                      ),
+                      if (_error != null) ...[
+                        const SizedBox(height: 8),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 4),
+                          child: Text(
+                            _error!,
+                            style: const TextStyle(
+                              color: AppColors.error,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                            ),
                           ),
                         ),
-                      ),
+                      ],
+                      const SizedBox(height: 16),
+                      _buildSubmitButton(),
+                      const SizedBox(height: 18),
+                      _buildOrDivider(),
+                      const SizedBox(height: 18),
+                      _buildFacebookButton(),
+                      const SizedBox(height: 30),
+                      _buildSignUpLink(),
+                      const SizedBox(height: 24),
+                      _buildDemoAccounts(),
+                      const SizedBox(height: 24),
                     ],
-                    const SizedBox(height: 16),
-                    _buildSubmitButton(),
-                    const SizedBox(height: 18),
-                    _buildOrDivider(),
-                    const SizedBox(height: 18),
-                    _buildFacebookButton(),
-                    const SizedBox(height: 30),
-                    _buildSignUpLink(),
-                    const SizedBox(height: 24),
-                    _buildDemoAccounts(),
-                    const SizedBox(height: 24),
-                  ],
+                  ),
                 ),
               ),
             ),
@@ -138,18 +157,19 @@ class _LoginScreenState extends State<LoginScreen> {
       ),
     );
   }
+
   Widget _buildSubmitButton() {
     return SizedBox(
       height: 44,
       child: ElevatedButton(
         onPressed: _loading ? null : _submit,
         child: _loading
-            ? const SizedBox(
+            ? SizedBox(
                 width: 20,
                 height: 20,
                 child: CircularProgressIndicator(
                   strokeWidth: 2,
-                  color: AppColors.surface,
+                  color: context.surfaceColor,
                 ),
               )
             : const Text(AppStrings.logIn),
@@ -182,7 +202,8 @@ class _LoginScreenState extends State<LoginScreen> {
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         TextButton.icon(
-          onPressed: () => ToastHelper.showToast(context, AppStrings.facebookLoginMock),
+          onPressed: () =>
+              ToastHelper.showToast(context, AppStrings.facebookLoginMock),
           icon: const Icon(
             Icons.facebook,
             color: AppColors.primaryDark,

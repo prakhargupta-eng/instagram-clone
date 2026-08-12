@@ -4,7 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:instagram_clone/src/compontes/ToastHelper.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:video_player/video_player.dart' as video;
+import 'package:get_thumbnail_video/video_thumbnail.dart';
+import 'package:get_thumbnail_video/index.dart';
 
+import '../../adaptive_colors.dart';
 import '../../constants.dart';
 import '../../services/local_post_store.dart';
 import '../../widgets/media_image.dart';
@@ -14,16 +17,80 @@ class PostEditorScreen extends StatefulWidget {
     super.key,
     required this.mediaUrl,
     required this.isVideo,
+    this.thumbnailUrl,
   });
 
   final String mediaUrl;
   final bool isVideo;
+  final String? thumbnailUrl;
 
   @override
   State<PostEditorScreen> createState() => _PostEditorScreenState();
 }
 
 class _PostEditorScreenState extends State<PostEditorScreen> {
+  double? _imageAspectRatio;
+  String? _thumbnailPath;
+
+  @override
+  void initState() {
+    super.initState();
+    if (!widget.isVideo) {
+      _loadImageAspectRatio();
+    } else {
+      _loadVideoThumbnail();
+    }
+  }
+
+  Future<void> _loadVideoThumbnail() async {
+    if (widget.thumbnailUrl != null &&
+        widget.thumbnailUrl!.startsWith('http') &&
+        !widget.thumbnailUrl!.contains('picsum.photos')) {
+      if (mounted) {
+        setState(() {
+          _thumbnailPath = widget.thumbnailUrl;
+        });
+      }
+      return;
+    }
+    try {
+      final tempDir = await getTemporaryDirectory();
+      final xFile = await VideoThumbnail.thumbnailFile(
+        video: widget.mediaUrl,
+        thumbnailPath: tempDir.path,
+        imageFormat: ImageFormat.JPEG,
+        maxWidth: 200,
+        quality: 50,
+      );
+      if (mounted) {
+        setState(() {
+          _thumbnailPath = xFile.path;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error generating thumbnail in editor: $e');
+      if (mounted) {
+        setState(() {
+          _thumbnailPath = widget.thumbnailUrl;
+        });
+      }
+    }
+  }
+
+  Future<void> _loadImageAspectRatio() async {
+    try {
+      final bytes = await File(widget.mediaUrl).readAsBytes();
+      final codec = await ui.instantiateImageCodec(bytes);
+      final frame = await codec.getNextFrame();
+      final image = frame.image;
+      if (mounted) {
+        setState(() {
+          _imageAspectRatio = image.width / image.height;
+        });
+      }
+    } catch (_) {}
+  }
+
   int _filterIndex = 0;
   int _editorMode = 0; // 0 = Filter, 1 = Edit, 2 = Crop
   double? _aspect;
@@ -40,10 +107,26 @@ class _PostEditorScreenState extends State<PostEditorScreen> {
   List<double> _brightnessMatrix(double value) {
     final translation = value * 255.0;
     return [
-      1, 0, 0, 0, translation,
-      0, 1, 0, 0, translation,
-      0, 0, 1, 0, translation,
-      0, 0, 0, 1, 0,
+      1,
+      0,
+      0,
+      0,
+      translation,
+      0,
+      1,
+      0,
+      0,
+      translation,
+      0,
+      0,
+      1,
+      0,
+      translation,
+      0,
+      0,
+      0,
+      1,
+      0,
     ];
   }
 
@@ -51,10 +134,26 @@ class _PostEditorScreenState extends State<PostEditorScreen> {
     final scale = value;
     final translate = 128.0 * (1.0 - scale);
     return [
-      scale, 0, 0, 0, translate,
-      0, scale, 0, 0, translate,
-      0, 0, scale, 0, translate,
-      0, 0, 0, 1, 0,
+      scale,
+      0,
+      0,
+      0,
+      translate,
+      0,
+      scale,
+      0,
+      0,
+      translate,
+      0,
+      0,
+      scale,
+      0,
+      translate,
+      0,
+      0,
+      0,
+      1,
+      0,
     ];
   }
 
@@ -64,10 +163,26 @@ class _PostEditorScreenState extends State<PostEditorScreen> {
     final g = 0.715 * invSat;
     final b = 0.072 * invSat;
     return [
-      r + value, g, b, 0, 0,
-      r, g + value, b, 0, 0,
-      r, g, b + value, 0, 0,
-      0, 0, 0, 1, 0,
+      r + value,
+      g,
+      b,
+      0,
+      0,
+      r,
+      g + value,
+      b,
+      0,
+      0,
+      r,
+      g,
+      b + value,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
     ];
   }
 
@@ -104,7 +219,7 @@ class _PostEditorScreenState extends State<PostEditorScreen> {
 
     final recorder = ui.PictureRecorder();
     final canvas = Canvas(recorder);
-    
+
     // Apply composed color filters using matrix multiplication
     List<double> combined = List<double>.from(_filters[_filterIndex].rawMatrix);
     if (_brightness != 0.0) {
@@ -127,10 +242,14 @@ class _PostEditorScreenState extends State<PostEditorScreen> {
       srcRect.width.round(),
       srcRect.height.round(),
     );
-    final byteData = await filteredImage.toByteData(format: ui.ImageByteFormat.png);
+    final byteData = await filteredImage.toByteData(
+      format: ui.ImageByteFormat.png,
+    );
 
     final tempDir = await getTemporaryDirectory();
-    final tempFile = File('${tempDir.path}/cropped_${DateTime.now().millisecondsSinceEpoch}.png');
+    final tempFile = File(
+      '${tempDir.path}/cropped_${DateTime.now().millisecondsSinceEpoch}.png',
+    );
     await tempFile.writeAsBytes(byteData!.buffer.asUint8List());
 
     return tempFile.path;
@@ -138,7 +257,20 @@ class _PostEditorScreenState extends State<PostEditorScreen> {
 
   Future<void> _onNext() async {
     if (widget.isVideo) {
-      Navigator.of(context).pop(widget.mediaUrl);
+      final baseUri = widget.mediaUrl.startsWith('http')
+          ? Uri.parse(widget.mediaUrl)
+          : Uri.file(widget.mediaUrl);
+      final uri = baseUri.replace(
+        queryParameters: {
+          'filterIndex': _filterIndex.toString(),
+          'brightness': _brightness.toString(),
+          'contrast': _contrast.toString(),
+          'saturation': _saturation.toString(),
+          if (_thumbnailPath != null && !_thumbnailPath!.startsWith('http'))
+            'thumbnailPath': _thumbnailPath!,
+        },
+      );
+      Navigator.of(context).pop(uri.toString());
       return;
     }
 
@@ -156,7 +288,11 @@ class _PostEditorScreenState extends State<PostEditorScreen> {
         setState(() {
           _isProcessing = false;
         });
-        ToastHelper.showToast(context, "failed to process image: $e", isError: true);
+        ToastHelper.showToast(
+          context,
+          "failed to process image: $e",
+          isError: true,
+        );
       }
     }
   }
@@ -164,11 +300,18 @@ class _PostEditorScreenState extends State<PostEditorScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.surface,
+      backgroundColor: context.surfaceColor,
       appBar: AppBar(
-        backgroundColor: AppColors.surface,
-        foregroundColor: AppColors.textPrimary,
-        title: const Text('Edit', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+        backgroundColor: context.surfaceColor,
+        foregroundColor: context.textPrimaryColor,
+        title: Text(
+          'Edit',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            color: context.textPrimaryColor,
+          ),
+        ),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () => Navigator.of(context).pop(),
@@ -178,7 +321,11 @@ class _PostEditorScreenState extends State<PostEditorScreen> {
             onPressed: _isProcessing ? null : _onNext,
             child: const Text(
               AppStrings.next,
-              style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w700, fontSize: 16),
+              style: TextStyle(
+                color: AppColors.primary,
+                fontWeight: FontWeight.w700,
+                fontSize: 16,
+              ),
             ),
           ),
           const SizedBox(width: 8),
@@ -189,33 +336,87 @@ class _PostEditorScreenState extends State<PostEditorScreen> {
           Column(
             children: [
               Expanded(
-                child: Stack(
-                  children: [
-                    Positioned.fill(
-                      child: ColorFiltered(
-                        colorFilter: _filters[_filterIndex].matrix,
-                        child: ColorFiltered(
-                          colorFilter: ColorFilter.matrix(_brightnessMatrix(_brightness)),
-                          child: ColorFiltered(
-                            colorFilter: ColorFilter.matrix(_contrastMatrix(_contrast)),
-                            child: ColorFiltered(
-                              colorFilter: ColorFilter.matrix(_saturationMatrix(_saturation)),
-                              child: _MediaPreview(url: widget.mediaUrl, isVideo: widget.isVideo),
+                child: Center(
+                  child: _imageAspectRatio == null
+                      ? Stack(
+                          children: [
+                            Positioned.fill(
+                              child: ColorFiltered(
+                                colorFilter: _filters[_filterIndex].matrix,
+                                child: ColorFiltered(
+                                  colorFilter: ColorFilter.matrix(
+                                    _brightnessMatrix(_brightness),
+                                  ),
+                                  child: ColorFiltered(
+                                    colorFilter: ColorFilter.matrix(
+                                      _contrastMatrix(_contrast),
+                                    ),
+                                    child: ColorFiltered(
+                                      colorFilter: ColorFilter.matrix(
+                                        _saturationMatrix(_saturation),
+                                      ),
+                                      child: _MediaPreview(
+                                        url: widget.mediaUrl,
+                                        isVideo: widget.isVideo,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
                             ),
+                            if (_editorMode == 2)
+                              Positioned.fill(
+                                child: _CropBox(
+                                  aspect: _aspect,
+                                  imageAspect: 1.0,
+                                  onCropChanged: (rect) {
+                                    _normalizedCropRect = rect;
+                                  },
+                                ),
+                              ),
+                          ],
+                        )
+                      : AspectRatio(
+                          aspectRatio: _imageAspectRatio!,
+                          child: Stack(
+                            children: [
+                              Positioned.fill(
+                                child: ColorFiltered(
+                                  colorFilter: _filters[_filterIndex].matrix,
+                                  child: ColorFiltered(
+                                    colorFilter: ColorFilter.matrix(
+                                      _brightnessMatrix(_brightness),
+                                    ),
+                                    child: ColorFiltered(
+                                      colorFilter: ColorFilter.matrix(
+                                        _contrastMatrix(_contrast),
+                                      ),
+                                      child: ColorFiltered(
+                                        colorFilter: ColorFilter.matrix(
+                                          _saturationMatrix(_saturation),
+                                        ),
+                                        child: _MediaPreview(
+                                          url: widget.mediaUrl,
+                                          isVideo: widget.isVideo,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              if (_editorMode == 2)
+                                Positioned.fill(
+                                  child: _CropBox(
+                                    aspect: _aspect,
+                                    imageAspect: _imageAspectRatio!,
+                                    onCropChanged: (rect) {
+                                      _normalizedCropRect = rect;
+                                    },
+                                  ),
+                                ),
+                            ],
                           ),
                         ),
-                      ),
-                    ),
-                    if (_editorMode == 2)
-                      Positioned.fill(
-                        child: _CropBox(
-                          aspect: _aspect,
-                          onCropChanged: (rect) {
-                            _normalizedCropRect = rect;
-                          },
-                        ),
-                      ),
-                  ],
                 ),
               ),
               _buildModeBar(),
@@ -226,9 +427,7 @@ class _PostEditorScreenState extends State<PostEditorScreen> {
             Container(
               color: Colors.black54,
               child: const Center(
-                child: CircularProgressIndicator(
-                  color: AppColors.primary,
-                ),
+                child: CircularProgressIndicator(color: AppColors.primary),
               ),
             ),
         ],
@@ -238,11 +437,11 @@ class _PostEditorScreenState extends State<PostEditorScreen> {
 
   Widget _buildModeBar() {
     return Container(
-      decoration: const BoxDecoration(
-        color: AppColors.surface,
+      decoration: BoxDecoration(
+        color: context.surfaceColor,
         border: Border(
-          top: BorderSide(color: AppColors.border, width: 0.5),
-          bottom: BorderSide(color: AppColors.border, width: 0.5),
+          top: BorderSide(color: context.borderColor, width: 0.5),
+          bottom: BorderSide(color: context.borderColor, width: 0.5),
         ),
       ),
       padding: const EdgeInsets.symmetric(vertical: 8),
@@ -264,15 +463,16 @@ class _PostEditorScreenState extends State<PostEditorScreen> {
             selected: _editorMode == 1,
             onTap: () => setState(() => _editorMode = 1),
           ),
-          _ModeButton(
-            icon: Icons.crop,
-            label: 'Crop',
-            selected: _editorMode == 2,
-            onTap: () => setState(() {
-              _editorMode = 2;
-              _selectedAdjustment = null;
-            }),
-          ),
+          if (!widget.isVideo)
+            _ModeButton(
+              icon: Icons.crop,
+              label: 'Crop',
+              selected: _editorMode == 2,
+              onTap: () => setState(() {
+                _editorMode = 2;
+                _selectedAdjustment = null;
+              }),
+            ),
         ],
       ),
     );
@@ -305,7 +505,7 @@ class _PostEditorScreenState extends State<PostEditorScreen> {
 
       return Container(
         height: 104,
-        color: AppColors.surface,
+        color: context.surfaceColor,
         padding: const EdgeInsets.symmetric(horizontal: 16),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -315,9 +515,9 @@ class _PostEditorScreenState extends State<PostEditorScreen> {
               children: [
                 Text(
                   _selectedAdjustment!,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontWeight: FontWeight.w600,
-                    color: AppColors.textPrimary,
+                    color: context.textPrimaryColor,
                     fontSize: 14,
                   ),
                 ),
@@ -334,7 +534,7 @@ class _PostEditorScreenState extends State<PostEditorScreen> {
             Row(
               children: [
                 IconButton(
-                  icon: const Icon(Icons.close, color: AppColors.textPrimary),
+                  icon: Icon(Icons.close, color: context.textPrimaryColor),
                   onPressed: () {
                     setState(() {
                       // Cancel: revert dynamic edit preview back to original saved value
@@ -355,7 +555,7 @@ class _PostEditorScreenState extends State<PostEditorScreen> {
                     min: min,
                     max: max,
                     activeColor: AppColors.primary,
-                    inactiveColor: AppColors.border,
+                    inactiveColor: context.borderColor,
                     onChanged: (val) {
                       setState(() {
                         _tempVal = val;
@@ -394,7 +594,7 @@ class _PostEditorScreenState extends State<PostEditorScreen> {
 
     return Container(
       height: 104,
-      color: AppColors.surface,
+      color: context.surfaceColor,
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
@@ -452,7 +652,7 @@ class _PostEditorScreenState extends State<PostEditorScreen> {
           children: [
             Icon(
               icon,
-              color: isActive ? AppColors.primary : AppColors.textPrimary,
+              color: isActive ? AppColors.primary : context.textPrimaryColor,
               size: 24,
             ),
             const SizedBox(height: 6),
@@ -461,7 +661,7 @@ class _PostEditorScreenState extends State<PostEditorScreen> {
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
-                color: isActive ? AppColors.primary : AppColors.textPrimary,
+                color: isActive ? AppColors.primary : context.textPrimaryColor,
               ),
             ),
           ],
@@ -473,7 +673,7 @@ class _PostEditorScreenState extends State<PostEditorScreen> {
   Widget _buildFilterStrip() {
     return Container(
       height: 104,
-      color: AppColors.surface,
+      color: context.surfaceColor,
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
@@ -493,7 +693,9 @@ class _PostEditorScreenState extends State<PostEditorScreen> {
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(4),
                         border: Border.all(
-                          color: _filterIndex == index ? AppColors.primary : Colors.transparent,
+                          color: _filterIndex == index
+                              ? AppColors.primary
+                              : Colors.transparent,
                           width: 1.5,
                         ),
                       ),
@@ -502,11 +704,18 @@ class _PostEditorScreenState extends State<PostEditorScreen> {
                         child: ColorFiltered(
                           colorFilter: filter.matrix,
                           child: MediaImage(
-                            path: widget.mediaUrl,
+                            path: widget.isVideo
+                                ? (_thumbnailPath ??
+                                      widget.thumbnailUrl ??
+                                      'https://picsum.photos/seed/vdefault/400/600')
+                                : widget.mediaUrl,
                             fit: BoxFit.contain,
                             errorBuilder: (_, _, _) => Container(
                               color: Colors.black26,
-                              child: const Icon(Icons.broken_image_outlined, color: Colors.white38),
+                              child: const Icon(
+                                Icons.broken_image_outlined,
+                                color: Colors.white38,
+                              ),
                             ),
                           ),
                         ),
@@ -517,9 +726,13 @@ class _PostEditorScreenState extends State<PostEditorScreen> {
                   Text(
                     filter.name,
                     style: TextStyle(
-                      color: _filterIndex == index ? AppColors.textPrimary : AppColors.textSecondary,
+                      color: _filterIndex == index
+                          ? context.textPrimaryColor
+                          : context.textSecondaryColor,
                       fontSize: 11,
-                      fontWeight: _filterIndex == index ? FontWeight.w600 : FontWeight.w400,
+                      fontWeight: _filterIndex == index
+                          ? FontWeight.w600
+                          : FontWeight.w400,
                     ),
                   ),
                 ],
@@ -533,7 +746,7 @@ class _PostEditorScreenState extends State<PostEditorScreen> {
 
   Widget _buildCropPanel() {
     return Container(
-      color: AppColors.surface,
+      color: context.surfaceColor,
       padding: const EdgeInsets.symmetric(vertical: 12),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -546,9 +759,11 @@ class _PostEditorScreenState extends State<PostEditorScreen> {
                 selected: _aspect == aspect,
                 onSelected: (_) => setState(() => _aspect = aspect),
                 selectedColor: AppColors.primary,
-                backgroundColor: AppColors.background,
+                backgroundColor: context.backgroundColor,
                 labelStyle: TextStyle(
-                  color: _aspect == aspect ? Colors.white : AppColors.textPrimary,
+                  color: _aspect == aspect
+                      ? Colors.white
+                      : context.textPrimaryColor,
                   fontSize: 12,
                 ),
                 side: BorderSide.none,
@@ -585,19 +800,22 @@ class _MediaPreviewState extends State<_MediaPreview> {
     super.initState();
     if (widget.isVideo) {
       final path = widget.url;
-      _controller = LocalPostStore.isLocalPath(path)
-          ? video.VideoPlayerController.file(File(path))
-          : video.VideoPlayerController.networkUrl(Uri.parse(path))
-        ..initialize().then((_) {
-          if (!mounted) return;
-          _controller?.setLooping(true);
-          _controller?.setVolume(0);
-          _controller?.play();
-          setState(() {});
-        }).catchError((_) {
-          if (!mounted) return;
-          setState(() {});
-        });
+      _controller =
+          LocalPostStore.isLocalPath(path)
+                ? video.VideoPlayerController.file(File(path))
+                : video.VideoPlayerController.networkUrl(Uri.parse(path))
+            ..initialize()
+                .then((_) {
+                  if (!mounted) return;
+                  _controller?.setLooping(true);
+                  _controller?.setVolume(0);
+                  _controller?.play();
+                  setState(() {});
+                })
+                .catchError((_) {
+                  if (!mounted) return;
+                  setState(() {});
+                });
     }
   }
 
@@ -626,7 +844,11 @@ class _MediaPreviewState extends State<_MediaPreview> {
       errorBuilder: (_, _, _) => Container(
         color: Colors.black26,
         alignment: Alignment.center,
-        child: const Icon(Icons.broken_image_outlined, color: Colors.white38, size: 48),
+        child: const Icon(
+          Icons.broken_image_outlined,
+          color: Colors.white38,
+          size: 48,
+        ),
       ),
     );
   }
@@ -651,12 +873,16 @@ class _ModeButton extends StatelessWidget {
       onTap: onTap,
       child: Column(
         children: [
-          Icon(icon, color: selected ? AppColors.textPrimary : AppColors.textSecondary, size: 22),
+          Icon(
+            icon,
+            color: selected ? context.textPrimaryColor : context.textSecondaryColor,
+            size: 22,
+          ),
           const SizedBox(height: 4),
           Text(
             label,
             style: TextStyle(
-              color: selected ? AppColors.textPrimary : AppColors.textSecondary,
+              color: selected ? context.textPrimaryColor : context.textSecondaryColor,
               fontSize: 11,
               fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
             ),
@@ -668,9 +894,14 @@ class _ModeButton extends StatelessWidget {
 }
 
 class _CropBox extends StatefulWidget {
-  const _CropBox({required this.aspect, required this.onCropChanged});
+  const _CropBox({
+    required this.aspect,
+    required this.imageAspect,
+    required this.onCropChanged,
+  });
 
   final double? aspect;
+  final double imageAspect;
   final ValueChanged<Rect> onCropChanged;
 
   @override
@@ -696,7 +927,8 @@ class _CropBoxState extends State<_CropBox> {
   @override
   void didUpdateWidget(_CropBox oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.aspect != widget.aspect) {
+    if (oldWidget.aspect != widget.aspect ||
+        oldWidget.imageAspect != widget.imageAspect) {
       _applyAspect();
       widget.onCropChanged(_rect);
     }
@@ -705,11 +937,16 @@ class _CropBoxState extends State<_CropBox> {
   void _applyAspect() {
     final a = widget.aspect;
     if (a == null) return;
+    final imageAspect = widget.imageAspect;
     var w = _rect.width;
-    var h = w / a;
+    var h = w * imageAspect / a;
     if (h > 1) {
       h = 1;
-      w = a * h;
+      w = h * a / imageAspect;
+    }
+    if (w > 1) {
+      w = 1;
+      h = w * imageAspect / a;
     }
     final center = _rect.center;
     final rect = Rect.fromCenter(center: center, width: w, height: h);
@@ -778,13 +1015,41 @@ class _CropBoxState extends State<_CropBox> {
     setState(() {
       switch (_dragHandle) {
         case 0:
-          _rect = _clamp(Rect.fromLTRB(_rect.left + dx, _rect.top + dy, _rect.right, _rect.bottom));
+          var left = _rect.left + dx;
+          var top = _rect.top + dy;
+          if (widget.aspect != null) {
+            final w = _rect.right - left;
+            final h = w * widget.imageAspect / widget.aspect!;
+            top = _rect.bottom - h;
+          }
+          _rect = _clamp(Rect.fromLTRB(left, top, _rect.right, _rect.bottom));
         case 1:
-          _rect = _clamp(Rect.fromLTRB(_rect.left, _rect.top + dy, _rect.right + dx, _rect.bottom));
+          var right = _rect.right + dx;
+          var top = _rect.top + dy;
+          if (widget.aspect != null) {
+            final w = right - _rect.left;
+            final h = w * widget.imageAspect / widget.aspect!;
+            top = _rect.bottom - h;
+          }
+          _rect = _clamp(Rect.fromLTRB(_rect.left, top, right, _rect.bottom));
         case 2:
-          _rect = _clamp(Rect.fromLTRB(_rect.left, _rect.top, _rect.right + dx, _rect.bottom + dy));
+          var right = _rect.right + dx;
+          var bottom = _rect.bottom + dy;
+          if (widget.aspect != null) {
+            final w = right - _rect.left;
+            final h = w * widget.imageAspect / widget.aspect!;
+            bottom = _rect.top + h;
+          }
+          _rect = _clamp(Rect.fromLTRB(_rect.left, _rect.top, right, bottom));
         case 3:
-          _rect = _clamp(Rect.fromLTRB(_rect.left + dx, _rect.top, _rect.right, _rect.bottom + dy));
+          var left = _rect.left + dx;
+          var bottom = _rect.bottom + dy;
+          if (widget.aspect != null) {
+            final w = _rect.right - left;
+            final h = w * widget.imageAspect / widget.aspect!;
+            bottom = _rect.top + h;
+          }
+          _rect = _clamp(Rect.fromLTRB(left, _rect.top, _rect.right, bottom));
         case 4:
           final r = _rect.shift(Offset(dx, dy));
           if (r.left >= 0 && r.top >= 0 && r.right <= 1 && r.bottom <= 1) {
@@ -796,11 +1061,11 @@ class _CropBoxState extends State<_CropBox> {
   }
 
   Rect _localRect(Size size) => Rect.fromLTRB(
-        _rect.left * size.width,
-        _rect.top * size.height,
-        _rect.right * size.width,
-        _rect.bottom * size.height,
-      );
+    _rect.left * size.width,
+    _rect.top * size.height,
+    _rect.right * size.width,
+    _rect.bottom * size.height,
+  );
 }
 
 class _CropPainter extends CustomPainter {
@@ -825,8 +1090,16 @@ class _CropPainter extends CustomPainter {
     for (var i = 1; i < 3; i++) {
       final x = cropRect.left + cropRect.width * i / 3;
       final y = cropRect.top + cropRect.height * i / 3;
-      canvas.drawLine(Offset(x, cropRect.top), Offset(x, cropRect.bottom), grid);
-      canvas.drawLine(Offset(cropRect.left, y), Offset(cropRect.right, y), grid);
+      canvas.drawLine(
+        Offset(x, cropRect.top),
+        Offset(x, cropRect.bottom),
+        grid,
+      );
+      canvas.drawLine(
+        Offset(cropRect.left, y),
+        Offset(cropRect.right, y),
+        grid,
+      );
     }
 
     final border = Paint()
@@ -846,111 +1119,18 @@ class _CropPainter extends CustomPainter {
       canvas.drawCircle(
         corner,
         handleRadius,
-        Paint()..color = Colors.black.withValues(alpha: 0.15)..style = PaintingStyle.stroke..strokeWidth = 1,
+        Paint()
+          ..color = Colors.black.withValues(alpha: 0.15)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1,
       );
     }
   }
 
   @override
   bool shouldRepaint(_CropPainter oldDelegate) =>
-      oldDelegate.cropRect != cropRect || oldDelegate.handleRadius != handleRadius;
+      oldDelegate.cropRect != cropRect ||
+      oldDelegate.handleRadius != handleRadius;
 }
 
-class FilterPreset {
-  const FilterPreset(this.name, this.matrix, this.rawMatrix);
-
-  final String name;
-  final ColorFilter matrix;
-  final List<double> rawMatrix;
-}
-
-final _filters = <FilterPreset>[
-  const FilterPreset('Normal', ColorFilter.matrix([
-    1, 0, 0, 0, 0,
-    0, 1, 0, 0, 0,
-    0, 0, 1, 0, 0,
-    0, 0, 0, 1, 0,
-  ]), [
-    1, 0, 0, 0, 0,
-    0, 1, 0, 0, 0,
-    0, 0, 1, 0, 0,
-    0, 0, 0, 1, 0,
-  ]),
-  const FilterPreset('Clarendon', ColorFilter.matrix([
-    1.25, 0, 0, 0, -18,
-    0, 1.25, 0, 0, -18,
-    0, 0, 1.25, 0, -28,
-    0, 0, 0, 1, 0,
-  ]), [
-    1.25, 0, 0, 0, -18,
-    0, 1.25, 0, 0, -18,
-    0, 0, 1.25, 0, -28,
-    0, 0, 0, 1, 0,
-  ]),
-  const FilterPreset('Gingham', ColorFilter.matrix([
-    0.86, 0.07, 0.07, 0, 0,
-    0.07, 0.86, 0.07, 0, 0,
-    0.07, 0.07, 0.86, 0, 0,
-    0, 0, 0, 1, 0,
-  ]), [
-    0.86, 0.07, 0.07, 0, 0,
-    0.07, 0.86, 0.07, 0, 0,
-    0.07, 0.07, 0.86, 0, 0,
-    0, 0, 0, 1, 0,
-  ]),
-  const FilterPreset('Moon', ColorFilter.matrix([
-    0.21, 0.72, 0.07, 0, 40,
-    0.21, 0.72, 0.07, 0, 40,
-    0.21, 0.72, 0.07, 0, 40,
-    0, 0, 0, 1, 0,
-  ]), [
-    0.21, 0.72, 0.07, 0, 40,
-    0.21, 0.72, 0.07, 0, 40,
-    0.21, 0.72, 0.07, 0, 40,
-    0, 0, 0, 1, 0,
-  ]),
-  const FilterPreset('Lark', ColorFilter.matrix([
-    1.1, 0, 0, 0, 15,
-    0, 1.05, 0, 0, 15,
-    0, 0, 1.0, 0, 20,
-    0, 0, 0, 1, 0,
-  ]), [
-    1.1, 0, 0, 0, 15,
-    0, 1.05, 0, 0, 15,
-    0, 0, 1.0, 0, 20,
-    0, 0, 0, 1, 0,
-  ]),
-  const FilterPreset('Reyes', ColorFilter.matrix([
-    1.2, 0, 0, 0, 0,
-    0, 1.05, 0, 0, 0,
-    0, 0, 0.9, 0, 0,
-    0, 0, 0, 1, 0,
-  ]), [
-    1.2, 0, 0, 0, 0,
-    0, 1.05, 0, 0, 0,
-    0, 0, 0.9, 0, 0,
-    0, 0, 0, 1, 0,
-  ]),
-  const FilterPreset('Juno', ColorFilter.matrix([
-    1.4, 0, 0, 0, -15,
-    0, 1.2, 0, 0, -10,
-    0, 0, 1.1, 0, -10,
-    0, 0, 0, 1, 0,
-  ]), [
-    1.4, 0, 0, 0, -15,
-    0, 1.2, 0, 0, -10,
-    0, 0, 1.1, 0, -10,
-    0, 0, 0, 1, 0,
-  ]),
-  const FilterPreset('Willow', ColorFilter.matrix([
-    0.5, 0.5, 0, 0, 20,
-    0.35, 0.65, 0, 0, 15,
-    0.4, 0.4, 0.2, 0, 10,
-    0, 0, 0, 1, 0,
-  ]), [
-    0.5, 0.5, 0, 0, 20,
-    0.35, 0.65, 0, 0, 15,
-    0.4, 0.4, 0.2, 0, 10,
-    0, 0, 0, 1, 0,
-  ]),
-];
+final _filters = AppFilters.presets;
