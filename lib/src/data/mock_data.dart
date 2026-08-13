@@ -5,501 +5,104 @@ import '../models/user.dart';
 class MockDatabase {
   MockDatabase._();
 
-  static final users = <AppUser>[
-    AppUser(
-      id: 'u1',
-      username: 'alice',
-      fullName: 'Alice Chen',
-      email: 'alice@example.com',
-      bio: 'Coffee enthusiast ☕ | Tokyo 🇯🇵',
-      avatarUrl: 'https://i.pravatar.cc/300?img=47',
-      following: 128,
-      followers: 3400,
-    ),
-    AppUser(
-      id: 'u2',
-      username: 'marco',
-      fullName: 'Marco Silva',
-      email: 'marco@example.com',
-      bio: 'Photographer 📷 capturing light',
-      avatarUrl: 'https://i.pravatar.cc/300?img=12',
-      following: 56,
-      followers: 1200,
-    ),
-    AppUser(
-      id: 'u3',
-      username: 'priya',
-      fullName: 'Priya Patel',
-      email: 'priya@example.com',
-      bio: 'Travel bug ✈️ | Food lover 🍜',
-      avatarUrl: 'https://i.pravatar.cc/300?img=32',
-      following: 210,
-      followers: 8900,
-    ),
-    AppUser(
-      id: 'u4',
-      username: 'lucas',
-      fullName: 'Lucas Martin',
-      email: 'lucas@example.com',
-      bio: 'Mountain hiker 🏔️',
-      avatarUrl: 'https://i.pravatar.cc/300?img=15',
-      following: 34,
-      followers: 780,
-    ),
-    AppUser(
-      id: 'u5',
-      username: 'sofia',
-      fullName: 'Sofia Rossi',
-      email: 'sofia@example.com',
-      bio: 'Artist 🎨 | Milan',
-      avatarUrl: 'https://i.pravatar.cc/300?img=44',
-      following: 89,
-      followers: 5100,
-    ),
-    AppUser(
-      id: 'u6',
-      username: 'noah',
-      fullName: 'Noah Kim',
-      email: 'noah@example.com',
-      bio: 'Runner 🏃 | Seoul',
-      avatarUrl: 'https://i.pravatar.cc/300?img=68',
-      following: 41,
-      followers: 950,
-    ),
-    AppUser(
-      id: 'u7',
-      username: 'zoe',
-      fullName: 'Zoe Adams',
-      email: 'zoe@example.com',
-      bio: 'Sketchbook always in hand ✏️',
-      avatarUrl: 'https://i.pravatar.cc/300?img=20',
-      following: 73,
-      followers: 2200,
-    ),
-    AppUser(
-      id: 'u8',
-      username: 'liam',
-      fullName: 'Liam Brooks',
-      email: 'liam@example.com',
-      bio: 'Gym life 💪 | PT',
-      avatarUrl: 'https://i.pravatar.cc/300?img=60',
-      following: 45,
-      followers: 3100,
-    ),
-    AppUser(
-      id: 'u9',
-      username: 'mia',
-      fullName: 'Mia Fernandez',
-      email: 'mia@example.com',
-      bio: 'Plant mom 🌿 | Lover of slow mornings',
-      avatarUrl: 'https://i.pravatar.cc/300?img=36',
-      following: 102,
-      followers: 1800,
-    ),
-    AppUser(
-      id: 'u10',
-      username: 'kaito',
-      fullName: 'Kaito Nakamura',
-      email: 'kaito@example.com',
-      bio: 'Deep sea dreams 🤿 | Japan',
-      avatarUrl: 'https://i.pravatar.cc/300?img=53',
-      following: 67,
-      followers: 7600,
-    ),
-  ];
+  /// Empty mock database tables (all production data is loaded dynamically from REST backend API)
+  static final List<AppUser> users = <AppUser>[];
+  static final List<Post> posts = <Post>[];
+  static final List<Story> stories = <Story>[];
 
-  static AppUser get alice => users[0];
-  static AppUser get marco => users[1];
-  static AppUser get priya => users[2];
-  static AppUser get lucas => users[3];
-  static AppUser get sofia => users[4];
-  static AppUser get noah => users[5];
-  static AppUser get zoe => users[6];
-  static AppUser get liam => users[7];
-  static AppUser get mia => users[8];
-  static AppUser get kaito => users[9];
+  /// Test helper users
+  static final AppUser alice = AppUser(
+    id: 'u1',
+    username: 'alice',
+    fullName: 'Alice Chen',
+    email: 'alice@example.com',
+    bio: '',
+    avatarUrl: '',
+  );
 
-  static AppUser getUser(String id) =>
-      users.firstWhere((u) => u.id == id, orElse: () => users.first);
+  static final AppUser marco = AppUser(
+    id: 'u2',
+    username: 'marco',
+    fullName: 'Marco Silva',
+    email: 'marco@example.com',
+    bio: '',
+    avatarUrl: '',
+  );
 
-  static final follows = <String, List<String>>{
-    'u1': ['u2', 'u3', 'u5'],
-    'u2': ['u1', 'u4'],
-    'u3': ['u1', 'u2', 'u5', 'u6'],
-    'u4': ['u6', 'u3'],
-    'u5': ['u1', 'u3'],
-    'u6': ['u5', 'u2'],
-    'u7': ['u8', 'u9'],
-    'u8': ['u7', 'u10'],
-    'u9': ['u10', 'u7', 'u1'],
-    'u10': ['u9'],
-  };
+  static final AppUser zoe = AppUser(
+    id: 'u3',
+    username: 'zoe',
+    fullName: 'Zoe Vance',
+    email: 'zoe@example.com',
+    bio: '',
+    avatarUrl: '',
+  );
 
-  static final uploadImages = <String>[
-    'https://picsum.photos/seed/cam1/600/600',
-    'https://picsum.photos/seed/cam2/600/600',
-    'https://picsum.photos/seed/cam3/600/600',
-    'https://picsum.photos/seed/cam4/600/600',
-    'https://picsum.photos/seed/cam5/600/600',
-    'https://picsum.photos/seed/cam6/600/600',
-    'https://picsum.photos/seed/cam7/600/600',
-    'https://picsum.photos/seed/cam8/600/600',
-    'https://picsum.photos/seed/cam9/600/600',
-    'https://picsum.photos/seed/cam10/600/600',
-    'https://picsum.photos/seed/cam11/600/600',
-    'https://picsum.photos/seed/cam12/600/600',
-  ];
-
-  static final stories = <Story>[
-    Story(
-      id: 's1',
-      user: alice,
-      imageUrl: 'https://picsum.photos/seed/alice/400/600',
-    ),
-    Story(
-      id: 's2',
-      user: marco,
-      imageUrl: 'https://picsum.photos/seed/marco/400/600',
-    ),
-    Story(
-      id: 's3',
-      user: priya,
-      imageUrl: 'https://picsum.photos/seed/priya/400/600',
-    ),
-    Story(
-      id: 's4',
-      user: lucas,
-      imageUrl: 'https://picsum.photos/seed/lucas/400/600',
-    ),
-    Story(
-      id: 's5',
-      user: sofia,
-      imageUrl: 'https://picsum.photos/seed/sofia/400/600',
-    ),
-    Story(
-      id: 's6',
-      user: noah,
-      imageUrl: 'https://picsum.photos/seed/noah/400/600',
-    ),
-    Story(
-      id: 's7',
-      user: zoe,
-      imageUrl: 'https://picsum.photos/seed/zoe/400/600',
-    ),
-    Story(
-      id: 's8',
-      user: liam,
-      imageUrl: 'https://picsum.photos/seed/liam/400/600',
-    ),
-    Story(
-      id: 's9',
-      user: mia,
-      imageUrl: 'https://picsum.photos/seed/mia/400/600',
-    ),
-    Story(
-      id: 's10',
-      user: kaito,
-      imageUrl: 'https://picsum.photos/seed/kaito/400/600',
-    ),
-  ];
-
-  static final posts = <Post>[
-    Post(
-      id: 'p1',
-      author: alice,
-      imageUrl: 'https://picsum.photos/seed/beach1/600/600',
-      caption: 'Golden hour hits different at the coast 🌅',
-      taggedUsers: [marco],
-      createdAt: DateTime.now().subtract(const Duration(minutes: 12)),
-      likedBy: const ['u2', 'u3', 'u4', 'u6'],
+  /// Skeleton UI loading placeholders (used strictly by Skeletonizer during API fetch)
+  static final List<Post> skeletonPosts = List.generate(
+    6,
+    (index) => Post(
+      id: 'sk_$index',
+      author: AppUser(
+        id: 'sk_u_$index',
+        username: 'username_placeholder',
+        fullName: 'Loading User Name',
+        email: '',
+        bio: 'Loading bio placeholder text line...',
+        avatarUrl: '',
+      ),
+      imageUrl: '',
+      caption: 'Loading caption text placeholder line for skeleton loader widget...',
+      createdAt: DateTime.now(),
+      likedBy: const ['u1', 'u2'],
       comments: [
         Comment(
-          id: 'c1',
-          author: marco,
-          text: 'Stunning shot! 🔥',
-          createdAt: DateTime.now().subtract(const Duration(minutes: 8)),
-        ),
-      ],
-    ),
-    Post(
-      id: 'p2',
-      author: marco,
-      imageUrl: 'https://picsum.photos/seed/city2/600/600',
-      caption: 'The city never sleeps 🌃',
-      taggedUsers: [alice, priya],
-      createdAt: DateTime.now().subtract(const Duration(hours: 2)),
-      likedBy: const ['u1', 'u5'],
-      comments: [
-        Comment(
-          id: 'c2',
-          author: priya,
-          text: 'Where is this?',
-          createdAt: DateTime.now().subtract(
-            const Duration(hours: 1, minutes: 40),
+          id: 'sk_c_$index',
+          author: AppUser(
+            id: 'sk_u_c_$index',
+            username: 'commenter',
+            fullName: 'Commenter',
+            email: '',
+            bio: '',
+            avatarUrl: '',
           ),
+          text: 'Loading comment text placeholder...',
+          createdAt: DateTime.now(),
         ),
       ],
     ),
-    Post(
-      id: 'p3',
-      author: priya,
-      imageUrl: 'https://picsum.photos/seed/food3/600/600',
-      caption: 'Weekend ramen therapy 🍜',
-      createdAt: DateTime.now().subtract(const Duration(hours: 5)),
-      likedBy: const ['u1', 'u2', 'u4', 'u5', 'u6'],
-      comments: const [],
+  );
+
+  static final List<Story> skeletonStories = List.generate(
+    6,
+    (index) => Story(
+      id: 'sk_s_$index',
+      user: AppUser(
+        id: 'sk_su_$index',
+        username: 'user_$index',
+        fullName: 'User',
+        email: '',
+        bio: '',
+        avatarUrl: '',
+      ),
+      imageUrl: '',
     ),
-    Post(
-      id: 'p4',
-      author: lucas,
-      imageUrl: 'https://picsum.photos/seed/mount4/600/600',
-      caption: 'Summit push at 5am ⛰️',
-      createdAt: DateTime.now().subtract(const Duration(days: 1)),
-      likedBy: const ['u3'],
-      comments: const [],
+  );
+
+  static final List<Comment> skeletonComments = List.generate(
+    4,
+    (index) => Comment(
+      id: 'sk_cm_$index',
+      author: AppUser(
+        id: 'sk_cmu_$index',
+        username: 'user_commenter',
+        fullName: 'User Commenter',
+        email: '',
+        bio: '',
+        avatarUrl: '',
+      ),
+      text: 'Loading comment text placeholder line...',
+      createdAt: DateTime.now(),
     ),
-    Post(
-      id: 'p5',
-      author: sofia,
-      imageUrl: 'https://picsum.photos/seed/art5/600/600',
-      caption: 'New piece from the studio 🎨',
-      createdAt: DateTime.now().subtract(const Duration(days: 2)),
-      likedBy: const ['u1', 'u2', 'u3'],
-      comments: [
-        Comment(
-          id: 'c3',
-          author: alice,
-          text: 'Love the colors!',
-          createdAt: DateTime.now().subtract(
-            const Duration(days: 1, hours: 20),
-          ),
-        ),
-      ],
-    ),
-    Post(
-      id: 'p6',
-      author: noah,
-      imageUrl: 'https://picsum.photos/seed/run6/600/600',
-      caption: 'Morning miles 🏃',
-      createdAt: DateTime.now().subtract(const Duration(days: 3)),
-      likedBy: const ['u5', 'u4'],
-      comments: const [],
-    ),
-    Post(
-      id: 'v1',
-      author: sofia,
-      videoUrl:
-          'https://test-videos.co.uk/vids/sintel/mp4/h264/720/Sintel_720_10s_1MB.mp4',
-      caption: 'Up close with the bees 🐝',
-      createdAt: DateTime.now().subtract(const Duration(hours: 6)),
-      likedBy: const ['u1', 'u2', 'u3', 'u6'],
-      comments: const [],
-      isVideo: true,
-    ),
-    Post(
-      id: 'v2',
-      author: marco,
-      videoUrl:
-          'https://flutter.github.io/assets-for-api-docs/assets/videos/butterfly.mp4',
-      caption: 'Nature in motion 🦋',
-      createdAt: DateTime.now().subtract(const Duration(days: 1)),
-      likedBy: const ['u5', 'u1'],
-      comments: const [],
-      isVideo: true,
-    ),
-    Post(
-      id: 'p7',
-      author: zoe,
-      imageUrl: 'https://picsum.photos/seed/sketch7/600/600',
-      caption: 'Page 12 of the new sketchbook 📓',
-      createdAt: DateTime.now().subtract(const Duration(hours: 3)),
-      likedBy: const ['u8', 'u9'],
-      comments: const [],
-    ),
-    Post(
-      id: 'p8',
-      author: liam,
-      imageUrl: 'https://picsum.photos/seed/gym8/600/600',
-      caption: 'Leg day, every day 🦵',
-      createdAt: DateTime.now().subtract(const Duration(hours: 9)),
-      likedBy: const ['u7', 'u10'],
-      comments: const [],
-    ),
-    Post(
-      id: 'p9',
-      author: mia,
-      imageUrl: 'https://picsum.photos/seed/garden9/600/600',
-      caption: 'My little balcony jungle 🌱',
-      createdAt: DateTime.now().subtract(const Duration(hours: 30)),
-      likedBy: const ['u10', 'u1', 'u7'],
-      comments: [
-        Comment(
-          id: 'c4',
-          author: alice,
-          text: 'So green and lush!',
-          createdAt: DateTime.now().subtract(const Duration(hours: 26)),
-        ),
-      ],
-    ),
-    Post(
-      id: 'p10',
-      author: kaito,
-      imageUrl: 'https://picsum.photos/seed/ocean10/600/600',
-      caption: '40m below the surface 🌊',
-      createdAt: DateTime.now().subtract(const Duration(days: 2, hours: 4)),
-      likedBy: const ['u9', 'u8', 'u3'],
-      comments: const [],
-    ),
-    Post(
-      id: 'v3',
-      author: zoe,
-      videoUrl:
-          'https://test-videos.co.uk/vids/sintel/mp4/h264/720/Sintel_720_10s_1MB.mp4',
-      caption: 'Drawing bees between deadlines ✏️🐝',
-      createdAt: DateTime.now().subtract(const Duration(hours: 26)),
-      likedBy: const ['u9', 'u1'],
-      comments: const [],
-      isVideo: true,
-    ),
-    Post(
-      id: 'v4',
-      author: priya,
-      videoUrl:
-          'https://test-videos.co.uk/vids/sintel/mp4/h264/720/Sintel_720_10s_1MB.mp4',
-      caption: 'Outdoor photoshoot vibe 📸🌲',
-      music: 'Wilderness - Folk Band',
-      createdAt: DateTime.now().subtract(const Duration(hours: 1)),
-      likedBy: const ['u1', 'u2', 'u5'],
-      comments: const [],
-      isVideo: true,
-    ),
-    Post(
-      id: 'v5',
-      author: lucas,
-      videoUrl:
-          'https://test-videos.co.uk/vids/jellyfish/mp4/h264/360/Jellyfish_360_10s_1MB.mp4',
-      caption: 'Neon nights in Tokyo 🌌✨',
-      music: 'Synthwave Beats - CyberDJ',
-      createdAt: DateTime.now().subtract(const Duration(hours: 3)),
-      likedBy: const ['u3', 'u6'],
-      comments: const [],
-      isVideo: true,
-    ),
-    Post(
-      id: 'v6',
-      author: mia,
-      videoUrl:
-          'https://test-videos.co.uk/vids/jellyfish/mp4/h264/720/Jellyfish_720_10s_1MB.mp4',
-      caption: 'Rainy day puddle splashing 🌧️💦',
-      music: 'Raindrops - LoFi Chill',
-      createdAt: DateTime.now().subtract(const Duration(hours: 5)),
-      likedBy: const ['u8'],
-      comments: const [],
-      isVideo: true,
-    ),
-    Post(
-      id: 'v7',
-      author: kaito,
-      videoUrl:
-          'https://test-videos.co.uk/vids/elephantsdream/mp4/h264/360/ElephantsDream_360_10s_1MB.mp4',
-      caption: 'Mesmerizing ocean swells 🌊',
-      music: 'Ocean Breeze - Surf Beats',
-      createdAt: DateTime.now().subtract(const Duration(hours: 8)),
-      likedBy: const ['u9', 'u1', 'u2'],
-      comments: const [],
-      isVideo: true,
-    ),
-    Post(
-      id: 'v8',
-      author: noah,
-      videoUrl:
-          'https://test-videos.co.uk/vids/elephantsdream/mp4/h264/720/ElephantsDream_720_10s_1MB.mp4',
-      caption: 'Chasing sunbeams in the woods 🌲☀️',
-      music: 'Acoustic Guitar - Solitude',
-      createdAt: DateTime.now().subtract(const Duration(hours: 12)),
-      likedBy: const ['u5', 'u4'],
-      comments: const [],
-      isVideo: true,
-    ),
-    Post(
-      id: 'v9',
-      author: liam,
-      videoUrl:
-          'https://test-videos.co.uk/vids/caminandes/mp4/h264/360/Caminandes_360_10s_1MB.mp4',
-      caption: 'Spinning some retro vibes tonight 🎵📻',
-      music: 'Retro Vinyl - DJ Classic',
-      createdAt: DateTime.now().subtract(const Duration(hours: 18)),
-      likedBy: const ['u7', 'u10'],
-      comments: const [],
-      isVideo: true,
-    ),
-    Post(
-      id: 'v10',
-      author: alice,
-      videoUrl:
-          'https://test-videos.co.uk/vids/caminandes/mp4/h264/720/Caminandes_720_10s_1MB.mp4',
-      caption: 'Feeling like a kid again! 🛝🎢',
-      music: 'Fun & Playful - Happy Vibes',
-      createdAt: DateTime.now().subtract(const Duration(hours: 24)),
-      likedBy: const ['u2', 'u3'],
-      comments: const [],
-      isVideo: true,
-    ),
-    Post(
-      id: 'v11',
-      author: marco,
-      videoUrl:
-          'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4',
-      caption: 'Groovin under the neon 🕺✨',
-      music: 'Future Funk - Disco King',
-      createdAt: DateTime.now().subtract(const Duration(hours: 30)),
-      likedBy: const ['u1', 'u5', 'u6'],
-      comments: const [],
-      isVideo: true,
-    ),
-    Post(
-      id: 'v12',
-      author: priya,
-      videoUrl: 'https://www.w3schools.com/html/mov_bbb.mp4',
-      caption: 'Sunset peace by the shore 🌅🌾',
-      music: 'Golden Hour Acoustic',
-      createdAt: DateTime.now().subtract(const Duration(days: 2)),
-      likedBy: const ['u10', 'u7'],
-      comments: const [],
-      isVideo: true,
-    ),
-    Post(
-      id: 'v13',
-      author: sofia,
-      videoUrl: 'https://www.w3schools.com/html/movie.mp4',
-      caption: 'Late night piano sessions 🎹🎼',
-      music: 'Nocturne in C minor - Chopin',
-      createdAt: DateTime.now().subtract(const Duration(days: 2, hours: 6)),
-      likedBy: const ['u1', 'u2', 'u3'],
-      comments: const [],
-      isVideo: true,
-    ),
-    Post(
-      id: 'v14',
-      author: zoe,
-      videoUrl: 'https://media.w3.org/2010/05/sintel/trailer.mp4',
-      caption: 'Macro butterfly details 🦋🌸',
-      music: 'Nature Walk - Ambient',
-      createdAt: DateTime.now().subtract(const Duration(days: 3)),
-      likedBy: const ['u9'],
-      comments: const [],
-      isVideo: true,
-    ),
-    Post(
-      id: 'v15',
-      author: liam,
-      videoUrl: 'https://media.w3.org/2010/05/bunny/trailer.mp4',
-      caption: 'Honeybees hard at work 🐝🍯',
-      music: 'Buzzing Summer - Indie',
-      createdAt: DateTime.now().subtract(const Duration(days: 3, hours: 12)),
-      likedBy: const ['u8', 'u10'],
-      comments: const [],
-      isVideo: true,
-    ),
-  ];
+  );
 }

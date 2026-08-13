@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:skeletonizer/skeletonizer.dart';
 import 'package:video_player/video_player.dart' as video;
 import 'package:instagram_clone/src/compontes/ToastHelper.dart';
 
 import '../../app.dart';
 import '../../constants.dart';
+import '../../data/mock_data.dart';
 import '../../models/post.dart';
 import '../../models/user.dart';
 import '../../services/feed_service.dart';
@@ -11,6 +13,7 @@ import '../../services/video_cache_service.dart';
 import '../../widgets/avatar.dart';
 import '../../widgets/shader_filter_widget.dart';
 import '../home/comments_sheet.dart';
+import '../../widgets/ui_skeletons.dart';
 
 class ReelsScreen extends StatefulWidget {
   const ReelsScreen({
@@ -47,20 +50,37 @@ class _ReelsScreenState extends State<ReelsScreen> {
     return AnimatedBuilder(
       animation: widget.feedService,
       builder: (context, _) {
-        final reels = widget.feedService.posts.where((p) => p.isVideo).toList();
+        final rawReels = widget.feedService.posts.where((p) => p.isVideo).toList();
+        final isLoading = widget.feedService.isLoading;
+        if (isLoading && rawReels.isEmpty) {
+          return const Scaffold(
+            backgroundColor: Colors.black,
+            body: Skeletonizer(
+              enabled: true,
+              enableSwitchAnimation: true,
+              child: ReelSkeleton(),
+            ),
+          );
+        }
+
+        final reels = rawReels;
+
         final canPop = Navigator.canPop(context);
         return Scaffold(
           backgroundColor: Colors.black,
-          body: Stack(
-            children: [
-              reels.isEmpty
-                  ? const Center(
-                      child: Text(
-                        'No reels yet',
-                        style: TextStyle(color: Colors.white),
-                      ),
-                    )
-                  : PageView.builder(
+          body: Skeletonizer(
+            enabled: isLoading,
+            enableSwitchAnimation: true,
+            child: Stack(
+              children: [
+                reels.isEmpty
+                    ? const Center(
+                        child: Text(
+                          'No reels yet',
+                          style: TextStyle(color: Colors.white),
+                        ),
+                      )
+                    : PageView.builder(
                       controller: _controller,
                       scrollDirection: Axis.vertical,
                       itemCount: null,
@@ -99,9 +119,10 @@ class _ReelsScreenState extends State<ReelsScreen> {
                 ),
             ],
           ),
-        );
-      },
-    );
+        ),
+      );
+    },
+  );
   }
 }
 

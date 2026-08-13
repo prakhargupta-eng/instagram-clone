@@ -5,10 +5,14 @@ import '../../data/mock_data.dart';
 import '../../models/user.dart';
 import '../../widgets/avatar.dart';
 
+import '../../services/api_service.dart';
+import '../../services/feed_service.dart';
+
 class TagPeopleSheet extends StatefulWidget {
-  const TagPeopleSheet({super.key, required this.initialTagged});
+  const TagPeopleSheet({super.key, required this.initialTagged, this.feedService});
 
   final List<AppUser> initialTagged;
+  final FeedService? feedService;
 
   @override
   State<TagPeopleSheet> createState() => _TagPeopleSheetState();
@@ -18,6 +22,8 @@ class _TagPeopleSheetState extends State<TagPeopleSheet> {
   late final List<AppUser> _selectedUsers = List.from(widget.initialTagged);
   final TextEditingController _searchController = TextEditingController();
   String _query = '';
+  List<AppUser> _searchResults = [];
+  bool _searching = false;
 
   @override
   void dispose() {
@@ -25,14 +31,37 @@ class _TagPeopleSheetState extends State<TagPeopleSheet> {
     super.dispose();
   }
 
+  void _onSearchChanged(String val) async {
+    final query = val.trim();
+    setState(() {
+      _query = query;
+      _searching = query.isNotEmpty;
+    });
+
+    if (query.isEmpty) {
+      setState(() {
+        _searchResults = [];
+        _searching = false;
+      });
+      return;
+    }
+
+    try {
+      final results = await ApiService.instance.searchUsers(query);
+      if (mounted && _query == query) {
+        setState(() {
+          _searchResults = results;
+          _searching = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _searching = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final allUsers = MockDatabase.users;
-    final filteredUsers = allUsers.where((u) {
-      final q = _query.toLowerCase();
-      return u.username.toLowerCase().contains(q) ||
-          u.fullName.toLowerCase().contains(q);
-    }).toList();
+    final filteredUsers = _searchResults;
 
     return DraggableScrollableSheet(
       initialChildSize: 0.85,
@@ -89,7 +118,7 @@ class _TagPeopleSheetState extends State<TagPeopleSheet> {
                 padding: const EdgeInsets.all(12),
                 child: TextField(
                   controller: _searchController,
-                  onChanged: (val) => setState(() => _query = val.trim()),
+                  onChanged: _onSearchChanged,
                   style: TextStyle(color: context.textPrimaryColor, fontSize: 14),
                   decoration: InputDecoration(
                     hintText: 'Search people...',

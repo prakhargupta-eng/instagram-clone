@@ -14,6 +14,7 @@ import '../../services/feed_service.dart';
 import '../profile/profile_screen.dart';
 import '../reels/reels_screen.dart';
 import '../../widgets/media_image.dart';
+import '../../widgets/ui_skeletons.dart';
 
 // ── Category chip data ────────────────────────────────────────────────────────
 
@@ -945,6 +946,10 @@ class _SearchScreenState extends State<SearchScreen>
 
   Widget _buildExploreGrid() {
     final posts = widget.feedService.posts;
+    final isLoading = widget.feedService.isLoading;
+    if (isLoading && posts.isEmpty) {
+      return const ExploreGridSkeleton();
+    }
 
     if (posts.isEmpty) {
       return const Center(

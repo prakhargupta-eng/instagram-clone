@@ -1,12 +1,33 @@
 import 'dart:io';
 
+/// API Environment options
+enum ApiEnvironment { server, local }
+
 class ApiEndpoints {
-  /// Dynamically computes the backend base URL for Android Emulator vs iOS / Web / Desktop.
+  /// Active environment key (e.g. ApiEnvironment.server or ApiEnvironment.local)
+  static ApiEnvironment environment = ApiEnvironment.server;
+
+  /// Conveniences for setting environment via ApiEndpoints.prod or ApiEndpoints.loc
+  static ApiEnvironment get prod => ApiEnvironment.server;
+  static ApiEnvironment get loc => ApiEnvironment.local;
+
+  /// Render Production Server Base URL
+  static const String serverBaseUrl =
+      'https://instagram-0q68.onrender.com/api/v1';
+  static int port = 3000;
+  static String customHostIp = '';
+
+  /// Computes base URL dynamically based on current ApiEnvironment
   static String get baseUrl {
-    if (Platform.isAndroid) {
-      return 'http://10.0.2.2:3000/api/v1';
-    }
-    return 'http://localhost:3000/api/v1';
+    return switch (environment) {
+      ApiEnvironment.server => serverBaseUrl,
+      ApiEnvironment.local =>
+        customHostIp.isNotEmpty
+            ? 'http://$customHostIp:$port/api/v1'
+            : Platform.isAndroid
+            ? 'http://10.0.2.2:$port/api/v1'
+            : 'http://localhost:$port/api/v1',
+    };
   }
 
   // 1. Auth Endpoints

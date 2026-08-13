@@ -39,9 +39,6 @@ class AuthService extends ChangeNotifier {
     if (_initialized) return;
     _initialized = true;
     try {
-      // SQFlite local database call commented out in favor of REST API:
-      // final db = SqlDatabaseHelper.instance;
-
       await ApiService.instance.initSession();
       _currentUser = ApiService.instance.currentUser;
       if (_currentUser != null) {
@@ -51,19 +48,6 @@ class AuthService extends ChangeNotifier {
       debugPrint('AuthService init REST error: $e');
     }
     notifyListeners();
-  }
-
-  Future<void> _saveSession(AppUser user) async {
-    // SQFlite local database call commented out:
-    // final db = SqlDatabaseHelper.instance;
-    // await db.insertUser(user);
-    // await db.saveSession(user.id);
-  }
-
-  Future<void> _clearSession() async {
-    // SQFlite local database call commented out:
-    // final db = SqlDatabaseHelper.instance;
-    // await db.clearSession();
   }
 
   Future<AuthResult> login(String email, String password) async {
@@ -132,8 +116,6 @@ class AuthService extends ChangeNotifier {
   Future<void> logout() async {
     _currentUser = null;
     await ApiService.instance.logout();
-    // SQFlite call commented out:
-    // await _clearSession();
     notifyListeners();
   }
 
@@ -147,10 +129,6 @@ class AuthService extends ChangeNotifier {
     }
     _registeredUsers.removeWhere((u) => u.id == id);
     _currentUser = null;
-    // SQFlite calls commented out:
-    // final db = SqlDatabaseHelper.instance;
-    // await db.deleteUser(id);
-    // await db.clearSession();
     notifyListeners();
   }
 
@@ -178,8 +156,6 @@ class AuthService extends ChangeNotifier {
       );
     }
     _passwords[email] = newPassword;
-    // SQFlite call commented out:
-    // await SqlDatabaseHelper.instance.setPassword(email, newPassword);
     notifyListeners();
     return AuthResult(success: true, user: user);
   }

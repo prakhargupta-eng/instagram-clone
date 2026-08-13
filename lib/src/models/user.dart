@@ -26,18 +26,19 @@ class AppUser {
   });
 
   factory AppUser.fromJson(Map<String, dynamic> json) {
+    final uMap = (json['user'] is Map<String, dynamic>) ? json['user'] as Map<String, dynamic> : json;
     return AppUser(
-      id: json['id'],
-      username: json['username'],
-      fullName: json['fullName'],
-      email: json['email'] ?? '',
-      bio: json['bio'] ?? '',
-      avatarUrl: json['avatarUrl'] ?? '',
-      following: json['following'] ?? 0,
-      followers: json['followers'] ?? 0,
-      isPrivate: json['isPrivate'] ?? false,
-      website: json['website'] ?? '',
-      gender: json['gender'] ?? '',
+      id: (uMap['id'] ?? uMap['userId'] ?? json['id'] ?? '').toString(),
+      username: (uMap['username'] ?? json['username'] ?? 'user').toString(),
+      fullName: (uMap['fullName'] ?? uMap['name'] ?? json['fullName'] ?? uMap['username'] ?? json['username'] ?? 'User').toString(),
+      email: (uMap['email'] ?? json['email'] ?? '').toString(),
+      bio: (uMap['bio'] ?? json['bio'] ?? '').toString(),
+      avatarUrl: (uMap['avatarUrl'] ?? json['avatarUrl'] ?? '').toString(),
+      following: uMap['following'] ?? json['following'] ?? 0,
+      followers: uMap['followers'] ?? json['followers'] ?? 0,
+      isPrivate: uMap['isPrivate'] ?? json['isPrivate'] ?? false,
+      website: (uMap['website'] ?? json['website'] ?? '').toString(),
+      gender: (uMap['gender'] ?? json['gender'] ?? '').toString(),
     );
   }
 

@@ -8,7 +8,7 @@ import 'constants.dart';
 import 'services/auth_service.dart';
 import 'services/theme_service.dart';
 import 'theme.dart';
-import 'screens/auth/login_screen.dart';
+import 'screens/auth/login/login_screen.dart';
 import 'screens/home/home_shell.dart';
 
 import 'routes/app_router.dart';
@@ -90,14 +90,15 @@ class _InstaCloneAppState extends State<InstaCloneApp> {
                       state is AuthFailure) {
                     return LoginScreen(authService: _authService);
                   }
-                  return const Scaffold(
-                    backgroundColor: AppColors.surface,
-                    body: Center(
-                      child: CircularProgressIndicator(
-                        color: AppColors.primary,
-                      ),
-                    ),
-                  );
+                  // return const Scaffold(
+                  //   backgroundColor: AppColors.surface,
+                  //   body: Center(
+                  //     child: CircularProgressIndicator(
+                  //       color: AppColors.primary,
+                  //     ),
+                  //   ),
+                  // );
+                  return const SizedBox.shrink();
                 },
               ),
               onGenerateRoute: (settings) => AppRouter.generate(

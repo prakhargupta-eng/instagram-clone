@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:skeletonizer/skeletonizer.dart';
 
 import '../../app.dart';
 import '../../constants.dart';
+import '../../data/mock_data.dart';
 import '../../models/post.dart';
 import '../../models/user.dart';
 import '../../services/feed_service.dart';
 import '../../widgets/avatar.dart';
+import '../../widgets/ui_skeletons.dart';
 
 class CommentsSheet extends StatefulWidget {
   const CommentsSheet({
@@ -98,7 +101,17 @@ class _CommentsSheetState extends State<CommentsSheet> {
               builder: (context, _) {
                 final post =
                     widget.feedService.getPost(widget.post.id) ?? widget.post;
-                if (post.comments.isEmpty) {
+                final isLoading = widget.feedService.isLoading;
+                if (isLoading && post.comments.isEmpty) {
+                  return const Skeletonizer(
+                    enabled: true,
+                    enableSwitchAnimation: true,
+                    child: CommentsSkeleton(),
+                  );
+                }
+                final displayComments = post.comments;
+
+                if (displayComments.isEmpty) {
                   return Padding(
                     padding: const EdgeInsets.all(32),
                     child: Text(
@@ -109,9 +122,9 @@ class _CommentsSheetState extends State<CommentsSheet> {
                 }
                 return ListView.builder(
                   shrinkWrap: true,
-                  itemCount: post.comments.length,
+                  itemCount: displayComments.length,
                   itemBuilder: (context, index) {
-                    final comment = post.comments[index];
+                    final comment = displayComments[index];
                     return SlideFadeTransitionItem(
                       index: index,
                       createdAt: comment.createdAt,

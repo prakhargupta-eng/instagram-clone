@@ -11,9 +11,13 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     on<LoginRequested>(_onLoginRequested);
     on<SignupRequested>(_onSignupRequested);
     on<LogoutRequested>(_onLogoutRequested);
+    on<AuthStatusChanged>((event, emit) => emit(event.newState));
   }
 
-  Future<void> _onInitRequested(AuthInitRequested event, Emitter<AuthState> emit) async {
+  Future<void> _onInitRequested(
+    AuthInitRequested event,
+    Emitter<AuthState> emit,
+  ) async {
     emit(const AuthLoading());
     await authService.init();
     if (authService.isLoggedIn) {
@@ -23,7 +27,10 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     }
   }
 
-  Future<void> _onLoginRequested(LoginRequested event, Emitter<AuthState> emit) async {
+  Future<void> _onLoginRequested(
+    LoginRequested event,
+    Emitter<AuthState> emit,
+  ) async {
     emit(const AuthLoading());
     final result = await authService.login(event.email, event.password);
     if (result.success && result.user != null) {
@@ -34,7 +41,10 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     }
   }
 
-  Future<void> _onSignupRequested(SignupRequested event, Emitter<AuthState> emit) async {
+  Future<void> _onSignupRequested(
+    SignupRequested event,
+    Emitter<AuthState> emit,
+  ) async {
     emit(const AuthLoading());
     final result = await authService.signup(
       email: event.email,
@@ -50,7 +60,10 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     }
   }
 
-  Future<void> _onLogoutRequested(LogoutRequested event, Emitter<AuthState> emit) async {
+  Future<void> _onLogoutRequested(
+    LogoutRequested event,
+    Emitter<AuthState> emit,
+  ) async {
     emit(const AuthLoading());
     await authService.logout();
     emit(const AuthUnauthenticated());

@@ -12,12 +12,15 @@ class FeedService extends ChangeNotifier {
   final List<Story> _stories = [];
   final Map<String, List<String>> _follows = {};
   final Map<String, AppUser> _usersById = {};
-
-  bool _loadedLocal = false;
-  bool _isLoading = false;
   final Set<String> _bookmarkedPostIds = {};
 
+  bool _isLoading = false;
+  bool _loadedLocal = false;
+
   bool get isLoading => _isLoading;
+  bool get loadedLocal => _loadedLocal;
+
+  AppUser? userById(String id) => _usersById[id];
 
   bool isBookmarked(String postId) => _bookmarkedPostIds.contains(postId);
 
@@ -30,13 +33,9 @@ class FeedService extends ChangeNotifier {
     notifyListeners();
   }
 
-  AppUser? userById(String id) => _usersById[id];
-
   void ensureUserRegistered(AppUser user) {
     if (!_usersById.containsKey(user.id)) {
       _usersById[user.id] = user;
-      // SQFlite local database call commented out:
-      // SqlDatabaseHelper.instance.insertUser(user);
     }
   }
 
@@ -68,13 +67,6 @@ class FeedService extends ChangeNotifier {
       final remotePosts = await ApiService.instance.getFeedPosts();
       _posts.clear();
       _posts.addAll(remotePosts);
-
-      // SQFlite local database queries commented out:
-      // final db = SqlDatabaseHelper.instance;
-      // _posts.clear();
-      // _posts.addAll(await db.getAllPosts());
-      // _stories.clear();
-      // _stories.addAll(await db.getAllStories());
     } catch (e) {
       debugPrint('FeedService init REST error: $e');
     } finally {
@@ -106,12 +98,8 @@ class FeedService extends ChangeNotifier {
 
     if (wasFollowing) {
       list.remove(followeeId);
-      // SQFlite call commented out:
-      // db.deleteFollow(followerId, followeeId);
     } else {
       list.insert(0, followeeId);
-      // SQFlite call commented out:
-      // db.insertFollow(followerId, followeeId);
     }
     _follows[followerId] = list;
 
@@ -169,8 +157,6 @@ class FeedService extends ChangeNotifier {
   void markStoryAsWatched(String storyId) {
     if (!_watchedStoryIds.contains(storyId)) {
       _watchedStoryIds.add(storyId);
-      // SQFlite call commented out:
-      // SqlDatabaseHelper.instance.markStoryAsWatched(storyId);
       notifyListeners();
     }
   }
@@ -219,12 +205,8 @@ class FeedService extends ChangeNotifier {
 
     if (liked) {
       likedBy.remove(userId);
-      // SQFlite call commented out:
-      // db.removeLike(postId, userId);
     } else {
       likedBy.insert(0, userId);
-      // SQFlite call commented out:
-      // db.addLike(postId, userId);
     }
     _posts[index] = post.copyWith(likedBy: likedBy);
     notifyListeners();
@@ -249,9 +231,6 @@ class FeedService extends ChangeNotifier {
     );
     comments.add(newComment);
     _posts[index] = post.copyWith(comments: comments);
-
-    // SQFlite call commented out:
-    // SqlDatabaseHelper.instance.insertComment(postId, newComment);
     notifyListeners();
 
     try {
@@ -263,8 +242,6 @@ class FeedService extends ChangeNotifier {
 
   void addPost(Post post) async {
     _posts.insert(0, post);
-    // SQFlite call commented out:
-    // SqlDatabaseHelper.instance.insertPost(post);
     notifyListeners();
 
     try {
@@ -286,15 +263,11 @@ class FeedService extends ChangeNotifier {
   void deletePost(String postId) {
     _posts.removeWhere((p) => p.id == postId);
     LocalPostStore.instance.delete(postId);
-    // SQFlite call commented out:
-    // SqlDatabaseHelper.instance.deletePost(postId);
     notifyListeners();
   }
 
   void addStory(Story story) async {
     _stories.insert(0, story);
-    // SQFlite call commented out:
-    // SqlDatabaseHelper.instance.insertStory(story);
     notifyListeners();
 
     try {
@@ -359,7 +332,7 @@ class PendingUpload {
     this.location,
     this.music,
     required this.author,
-    required this.isVideo,
+    this.isVideo = false,
     this.progress = 0.0,
   });
 }

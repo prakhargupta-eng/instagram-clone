@@ -10,6 +10,7 @@ import '../../models/user.dart';
 import '../../services/auth_service.dart';
 import '../../services/feed_service.dart';
 import '../../widgets/avatar.dart';
+import '../../widgets/ui_skeletons.dart';
 import 'edit_profile_screen.dart';
 import 'changePassword.dart';
 import 'compontes/Stat.dart';
@@ -117,7 +118,15 @@ class _ProfileScreenState extends State<ProfileScreen>
                   widget.authService!.currentUser!.id,
                   displayUser.id,
                 );
+
           final isLoading = feedService.isLoading;
+          if (isLoading && posts.isEmpty) {
+            return const Skeletonizer(
+              enabled: true,
+              enableSwitchAnimation: true,
+              child: ProfileSkeleton(),
+            );
+          }
 
           return Skeletonizer(
             enabled: isLoading,
@@ -527,6 +536,7 @@ class _ProfileScreenState extends State<ProfileScreen>
     );
     if (confirmed == true) {
       await widget.authService?.logout();
+      if (!mounted) return;
       ToastHelper.showToast(context, "Logged out successfully.");
     }
   }
@@ -554,6 +564,7 @@ class _ProfileScreenState extends State<ProfileScreen>
     );
     if (confirmed == true) {
       await widget.authService?.deleteAccount();
+      if (!mounted) return;
       ToastHelper.showToast(context, "Account deleted successfully.");
     }
   }

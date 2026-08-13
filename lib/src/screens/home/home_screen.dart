@@ -14,6 +14,7 @@ import '../../services/feed_service.dart';
 import '../../services/music_service.dart';
 import '../../widgets/post_card.dart';
 import '../../widgets/story_bar.dart';
+import '../../widgets/ui_skeletons.dart';
 import '../create/create_post_screen.dart';
 import 'comments_sheet.dart';
 import '../chat/chat_screen.dart';
@@ -301,6 +302,17 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
 
     final isLoading = widget.feedService.isLoading;
 
+    if (isLoading && feed.isEmpty) {
+      return RefreshIndicator(
+        onRefresh: () => widget.feedService.refreshFeed(),
+        child: const Skeletonizer(
+          enabled: true,
+          enableSwitchAnimation: true,
+          child: FeedPageSkeleton(),
+        ),
+      );
+    }
+
     return RefreshIndicator(
       onRefresh: () => widget.feedService.refreshFeed(),
       child: Skeletonizer(
@@ -319,7 +331,7 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   StoryBar(
-                    stories: widget.feedService.storiesFor(_currentUser),
+                    stories: widget.feedService.stories,
                     currentUser: _currentUser,
                     feedService: widget.feedService,
                     onAddStory: _openCreateStory,

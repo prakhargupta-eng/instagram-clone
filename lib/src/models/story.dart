@@ -18,14 +18,16 @@ class Story {
   }) : createdAt = createdAt ?? DateTime.now();
 
   factory Story.fromJson(Map<String, dynamic> json) {
+    final uJson = (json['user'] ?? json['author']);
+    final uMap = (uJson is Map<String, dynamic>) ? uJson : <String, dynamic>{'id': json['userId'] ?? ''};
     return Story(
-      id: json['id'],
-      user: AppUser.fromJson(json['user']),
-      imageUrl: json['imageUrl'] ?? '',
+      id: (json['id'] ?? '').toString(),
+      user: AppUser.fromJson(uMap),
+      imageUrl: (json['imageUrl'] ?? '').toString(),
       isVideo: json['isVideo'] ?? false,
       duration: Duration(seconds: json['durationSeconds'] ?? 5),
       createdAt: json['createdAt'] != null
-          ? DateTime.parse(json['createdAt'])
+          ? (DateTime.tryParse(json['createdAt'].toString()) ?? DateTime.now())
           : DateTime.now(),
     );
   }

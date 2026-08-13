@@ -14,11 +14,17 @@ class Comment {
   });
 
   factory Comment.fromJson(Map<String, dynamic> json) {
+    final authorJson = json['author'] ?? json['user'];
+    final authorMap = (authorJson is Map<String, dynamic>)
+        ? authorJson
+        : <String, dynamic>{'id': json['userId'] ?? ''};
     return Comment(
-      id: json['id'],
-      author: AppUser.fromJson(json['author']),
-      text: json['text'],
-      createdAt: DateTime.parse(json['createdAt']),
+      id: (json['id'] ?? '').toString(),
+      author: AppUser.fromJson(authorMap),
+      text: (json['text'] ?? '').toString(),
+      createdAt: json['createdAt'] != null
+          ? (DateTime.tryParse(json['createdAt'].toString()) ?? DateTime.now())
+          : DateTime.now(),
     );
   }
 
@@ -74,22 +80,63 @@ class Post {
   bool isLikedBy(String userId) => likedBy.contains(userId);
 
   factory Post.fromJson(Map<String, dynamic> json, {AppUser? author}) {
+    final authorJson = json['author'] ?? json['user'];
+    final parsedAuthor = author ??
+        ((authorJson is Map<String, dynamic>)
+            ? AppUser.fromJson(authorJson)
+            : AppUser(
+                id: (json['authorId'] ?? '').toString(),
+                username: 'user',
+                fullName: 'User',
+                email: '',
+                bio: '',
+                avatarUrl: '',
+              ));
+
+    // Handle likes (array of strings OR array of objects like {userId: ...})
+    final List<String> likedByList = [];
+    if (json['likedBy'] is List) {
+      for (final item in (json['likedBy'] as List)) {
+        if (item != null) likedByList.add(item.toString());
+      }
+    } else if (json['likes'] is List) {
+      for (final item in (json['likes'] as List)) {
+        if (item is Map) {
+          final uId = item['userId'] ?? item['id'];
+          if (uId != null) likedByList.add(uId.toString());
+        } else if (item != null) {
+          likedByList.add(item.toString());
+        }
+      }
+    }
+
+    // Handle taggedUsers
+    final List<AppUser> tagged = [];
+    if (json['taggedUsers'] is List) {
+      for (final item in (json['taggedUsers'] as List)) {
+        if (item is Map<String, dynamic>) {
+          tagged.add(AppUser.fromJson(item));
+        }
+      }
+    }
+
     return Post(
-      id: json['id'],
-      author: author ?? AppUser.fromJson(json['author']),
-      imageUrl: json['imageUrl'] ?? json['path'] ?? '',
-      videoUrl: json['videoUrl'] ?? '',
-      caption: json['caption'] ?? '',
-      location: json['location'],
-      music: json['music'],
-      musicPreviewUrl: json['musicPreviewUrl'],
-      taggedUsers: (json['taggedUsers'] as List? ?? [])
-          .map((e) => AppUser.fromJson(e as Map<String, dynamic>))
-          .toList(),
-      createdAt: DateTime.parse(json['createdAt']),
-      likedBy: List<String>.from(json['likedBy'] ?? []),
+      id: (json['id'] ?? '').toString(),
+      author: parsedAuthor,
+      imageUrl: (json['imageUrl'] ?? json['path'] ?? '').toString(),
+      videoUrl: (json['videoUrl'] ?? '').toString(),
+      caption: (json['caption'] ?? '').toString(),
+      location: json['location']?.toString(),
+      music: json['music']?.toString(),
+      musicPreviewUrl: json['musicPreviewUrl']?.toString(),
+      taggedUsers: tagged,
+      createdAt: json['createdAt'] != null
+          ? (DateTime.tryParse(json['createdAt'].toString()) ?? DateTime.now())
+          : DateTime.now(),
+      likedBy: likedByList,
       comments: (json['comments'] as List? ?? [])
-          .map((e) => Comment.fromJson(e as Map<String, dynamic>))
+          .whereType<Map<String, dynamic>>()
+          .map((e) => Comment.fromJson(e))
           .toList(),
       isVideo: json['isVideo'] ?? false,
       filterIndex: json['filterIndex'] ?? 0,

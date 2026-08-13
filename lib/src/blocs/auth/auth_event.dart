@@ -1,3 +1,5 @@
+import 'auth_state.dart';
+
 abstract class AuthEvent {
   const AuthEvent();
 }
@@ -29,4 +31,11 @@ class SignupRequested extends AuthEvent {
 
 class LogoutRequested extends AuthEvent {
   const LogoutRequested();
+}
+
+/// Fired after a screen-level login/signup completes successfully.
+/// Skips [AuthLoading] so the current screen stays visible.
+class AuthStatusChanged extends AuthEvent {
+  final AuthState newState;
+  const AuthStatusChanged(this.newState);
 }

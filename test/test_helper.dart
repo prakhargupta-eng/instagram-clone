@@ -1,8 +1,5 @@
 import 'package:flutter/widgets.dart';
-import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:video_player_platform_interface/video_player_platform_interface.dart';
-
-import 'package:instagram_clone/src/services/sql_database_helper.dart';
 
 class FakeVideoPlayerPlatform extends VideoPlayerPlatform {
   @override
@@ -41,11 +38,13 @@ class FakeVideoPlayerPlatform extends VideoPlayerPlatform {
 
   @override
   Stream<VideoEvent> videoEventsFor(int textureId) {
-    return Stream.value(VideoEvent(
-      eventType: VideoEventType.initialized,
-      duration: const Duration(seconds: 10),
-      size: const Size(1920, 1080),
-    ));
+    return Stream.value(
+      VideoEvent(
+        eventType: VideoEventType.initialized,
+        duration: const Duration(seconds: 10),
+        size: const Size(1920, 1080),
+      ),
+    );
   }
 
   @override
@@ -59,15 +58,7 @@ void setupVideoPlayerMock() {
 }
 
 Future<void> setupTestHive() async {
-  // Legacy name kept for compatibility; initializes SQLite in-memory/ffi mode.
-  sqfliteFfiInit();
-  databaseFactory = databaseFactoryFfi;
-  SqlDatabaseHelper.isTesting = true;
-  await SqlDatabaseHelper.instance.closeForTesting();
   setupVideoPlayerMock();
 }
 
-Future<void> resetTestDatabase() async {
-  SqlDatabaseHelper.isTesting = true;
-  await SqlDatabaseHelper.instance.closeForTesting();
-}
+Future<void> resetTestDatabase() async {}

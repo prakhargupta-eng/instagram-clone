@@ -3,7 +3,7 @@ import '../constants.dart';
 import '../models/post.dart';
 import '../services/auth_service.dart';
 import '../services/feed_service.dart';
-import '../screens/auth/login_screen.dart';
+import '../screens/auth/login/login_screen.dart';
 import '../screens/home/home_shell.dart';
 import '../screens/profile/details_screen.dart';
 import 'app_routes.dart';
