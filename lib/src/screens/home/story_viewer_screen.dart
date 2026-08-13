@@ -1,9 +1,7 @@
-import 'dart:async';
 import 'dart:io';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart' as video;
-import '../../constants.dart';
 import '../../models/story.dart';
 import '../../services/feed_service.dart';
 import '../../services/local_post_store.dart';

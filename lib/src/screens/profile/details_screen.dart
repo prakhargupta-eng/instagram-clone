@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import '../../adaptive_colors.dart';
 import 'package:audioplayers/audioplayers.dart';
 import '../../app.dart';
-import '../../constants.dart';
 import '../../models/post.dart';
 import '../../services/feed_service.dart';
 import '../../widgets/post_card.dart';
@@ -47,21 +46,21 @@ class _DetailsScreenState extends State<DetailsScreen> with RouteAware {
     _currentIndex = _postList.indexWhere((p) => p.id == widget.post.id);
     if (_currentIndex == -1) _currentIndex = 0;
 
-    _scrollController = ScrollController();
+    final initialOffset = _currentIndex > 0 ? _currentIndex * 520.0 : 0.0;
+    _scrollController = ScrollController(initialScrollOffset: initialOffset);
     _scrollController.addListener(_onScroll);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      // Jump to the tapped initial post
+      if (!mounted) return;
       final targetKey = _getKeyForPost(widget.post.id);
-      final context = targetKey.currentContext;
-      if (context != null) {
+      final ctx = targetKey.currentContext;
+      if (ctx != null) {
         Scrollable.ensureVisible(
-          context,
+          ctx,
           alignment: 0.0,
           duration: Duration.zero,
         );
       }
-      // Trigger center detection on first frame
       _onScroll();
     });
   }
@@ -147,7 +146,8 @@ class _DetailsScreenState extends State<DetailsScreen> with RouteAware {
             _playMusicForPost(_postList[index]);
           } else {
             // Re-play if scrolled back into center and user hasn't explicitly paused
-            if (MusicService.instance.player.state != PlayerState.playing && !MusicService.instance.userPaused) {
+            if (MusicService.instance.player.state != PlayerState.playing &&
+                !MusicService.instance.userPaused) {
               MusicService.instance.resumePostMusic();
               setState(() {
                 _isPlaying = true;
@@ -178,7 +178,8 @@ class _DetailsScreenState extends State<DetailsScreen> with RouteAware {
       );
       if (mounted) {
         setState(() {
-          _isPlaying = MusicService.instance.player.state == PlayerState.playing;
+          _isPlaying =
+              MusicService.instance.player.state == PlayerState.playing;
         });
       }
     } catch (e) {
@@ -206,7 +207,6 @@ class _DetailsScreenState extends State<DetailsScreen> with RouteAware {
   Widget build(BuildContext context) {
     final authService = AppScope.of(context).authService;
     final currentUser = authService.currentUser!;
-    final activePost = _postList.isNotEmpty ? _postList[_currentIndex] : widget.post;
 
     return Scaffold(
       backgroundColor: context.surfaceColor,
@@ -226,8 +226,12 @@ class _DetailsScreenState extends State<DetailsScreen> with RouteAware {
             controller: _scrollController,
             itemCount: _postList.length,
             itemBuilder: (context, index) {
-              final post = widget.feedService.posts.firstWhere((p) => p.id == _postList[index].id, orElse: () => _postList[index]);
-              final author = widget.feedService.userById(post.author.id) ?? post.author;
+              final post = widget.feedService.posts.firstWhere(
+                (p) => p.id == _postList[index].id,
+                orElse: () => _postList[index],
+              );
+              final author =
+                  widget.feedService.userById(post.author.id) ?? post.author;
 
               return Container(
                 key: _getKeyForPost(post.id),
@@ -240,7 +244,10 @@ class _DetailsScreenState extends State<DetailsScreen> with RouteAware {
                       isMuted: _isMuted,
                       isActive: _currentIndex == index && _isRouteActive,
                       onMuteToggle: _toggleMute,
-                      onLike: () => widget.feedService.toggleLike(post.id, currentUser.id),
+                      onLike: () => widget.feedService.toggleLike(
+                        post.id,
+                        currentUser.id,
+                      ),
                       onComment: () => showCommentsSheet(
                         context,
                         feedService: widget.feedService,
@@ -248,7 +255,8 @@ class _DetailsScreenState extends State<DetailsScreen> with RouteAware {
                         currentUser: currentUser,
                       ),
                       isBookmarked: widget.feedService.isBookmarked(post.id),
-                      onBookmark: () => widget.feedService.toggleBookmark(post.id),
+                      onBookmark: () =>
+                          widget.feedService.toggleBookmark(post.id),
                       onTapMedia: () {
                         if (post.music != null && post.music!.isNotEmpty) {
                           _toggleMute();
@@ -269,7 +277,11 @@ class _DetailsScreenState extends State<DetailsScreen> with RouteAware {
                         }
                       },
                     ),
-                    Divider(height: 1, thickness: 0.5, color: context.borderColor),
+                    Divider(
+                      height: 1,
+                      thickness: 0.5,
+                      color: context.borderColor,
+                    ),
                   ],
                 ),
               );

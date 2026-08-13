@@ -331,35 +331,35 @@ class _PostCardState extends State<PostCard>
       child: Stack(
         alignment: Alignment.center,
         children: [
-          ShaderFilterWidget(
-            enabled: widget.post.filterIndex == 8,
-            child: ColorFiltered(
-              colorFilter: AppFilters.getCombinedFilter(
-                widget.post.filterIndex,
-                widget.post.brightness,
-                widget.post.contrast,
-                widget.post.saturation,
-              ),
-              child: AspectRatio(
-                aspectRatio: 1,
-                child:
-                    widget.post.isVideo &&
-                        _videoInitialized &&
-                        _videoController != null
-                    ? ClipRect(
-                        child: FittedBox(
-                          fit: BoxFit.cover,
-                          clipBehavior: Clip.hardEdge,
-                          child: SizedBox(
-                            width: _videoController!.value.size.width,
-                            height: _videoController!.value.size.height,
-                            child: video.VideoPlayer(_videoController!),
+          Hero(
+            tag: 'post_image_${widget.post.id}',
+            child: Material(
+              color: Colors.transparent,
+              child: ColorFiltered(
+                colorFilter: AppFilters.getCombinedFilter(
+                  widget.post.filterIndex,
+                  widget.post.brightness,
+                  widget.post.contrast,
+                  widget.post.saturation,
+                ),
+                child: AspectRatio(
+                  aspectRatio: 1,
+                  child:
+                      widget.post.isVideo &&
+                          _videoInitialized &&
+                          _videoController != null
+                      ? ClipRect(
+                          child: FittedBox(
+                            fit: BoxFit.cover,
+                            clipBehavior: Clip.hardEdge,
+                            child: SizedBox(
+                              width: _videoController!.value.size.width,
+                              height: _videoController!.value.size.height,
+                              child: video.VideoPlayer(_videoController!),
+                            ),
                           ),
-                        ),
-                      )
-                    : Hero(
-                        tag: 'post_image_${widget.post.id}',
-                        child: MediaImage(
+                        )
+                      : MediaImage(
                           path:
                               (_dynamicThumbnailPath != null &&
                                   _dynamicThumbnailPath!.isNotEmpty)
@@ -378,7 +378,7 @@ class _PostCardState extends State<PostCard>
                             ),
                           ),
                         ),
-                      ),
+                ),
               ),
             ),
           ),

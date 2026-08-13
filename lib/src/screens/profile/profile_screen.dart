@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:skeletonizer/skeletonizer.dart';
 import '../../adaptive_colors.dart';
 import '../../app.dart';
@@ -16,6 +17,7 @@ import 'compontes/EmptyTab.dart';
 import 'compontes/postTitle.dart';
 import 'package:instagram_clone/src/compontes/ToastHelper.dart';
 import '../../utils/number_helper.dart';
+import '../../utils/share_helper.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({
@@ -215,12 +217,10 @@ class _ProfileScreenState extends State<ProfileScreen>
                         child: SizedBox(
                           height: 32,
                           child: OutlinedButton(
-                            onPressed: () {
-                              ToastHelper.showToast(
-                                context,
-                                "Profile link copied",
-                              );
-                            },
+                            onPressed: () => ShareHelper.copyProfileLink(
+                              context,
+                              displayUser.username,
+                            ),
                             style: OutlinedButton.styleFrom(
                               side: BorderSide(
                                 color: context.borderColor,
@@ -276,7 +276,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                     children: [
                       _buildPostsTab(posts),
                       _buildReelsTab(posts),
-                      _buildTaggedTab(),
+                      _buildTaggedTab(feedService.posts, displayUser),
                     ],
                   ),
                 ),
@@ -340,8 +340,32 @@ class _ProfileScreenState extends State<ProfileScreen>
     );
   }
 
-  Widget _buildTaggedTab() {
-    return const EmptyTab(message: 'No tagged posts yet');
+  Widget _buildTaggedTab(List<Post> allPosts, AppUser displayUser) {
+    final taggedPosts = allPosts.where((p) {
+      return p.taggedUsers.any(
+        (u) =>
+            u.id == displayUser.id ||
+            u.username.toLowerCase() == displayUser.username.toLowerCase(),
+      );
+    }).toList();
+
+    if (taggedPosts.isEmpty) {
+      return const EmptyTab(message: 'Photos and videos of you');
+    }
+    return GridView.builder(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 3,
+        mainAxisSpacing: 2,
+        crossAxisSpacing: 2,
+      ),
+      itemCount: taggedPosts.length,
+      itemBuilder: (context, index) => PostTile(
+        feedService: feedService,
+        post: taggedPosts[index],
+        posts: taggedPosts,
+      ),
+    );
   }
 
   String _buttonLabel(bool isFollowing) {

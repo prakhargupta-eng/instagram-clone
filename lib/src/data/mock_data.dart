@@ -209,6 +209,7 @@ class MockDatabase {
       author: alice,
       imageUrl: 'https://picsum.photos/seed/beach1/600/600',
       caption: 'Golden hour hits different at the coast 🌅',
+      taggedUsers: [marco],
       createdAt: DateTime.now().subtract(const Duration(minutes: 12)),
       likedBy: const ['u2', 'u3', 'u4', 'u6'],
       comments: [
@@ -225,6 +226,7 @@ class MockDatabase {
       author: marco,
       imageUrl: 'https://picsum.photos/seed/city2/600/600',
       caption: 'The city never sleeps 🌃',
+      taggedUsers: [alice, priya],
       createdAt: DateTime.now().subtract(const Duration(hours: 2)),
       likedBy: const ['u1', 'u5'],
       comments: [

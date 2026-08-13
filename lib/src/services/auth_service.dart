@@ -1,4 +1,3 @@
-import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 
@@ -16,9 +15,7 @@ class AuthResult {
 }
 
 class AuthService extends ChangeNotifier {
-  static const _kSessionUser = 'session_user';
-  static const _kRegisteredUsers = 'registered_users';
-  static const _kPasswords = 'passwords';
+
 
   final Map<String, String> _passwords = {
     for (final u in MockDatabase.users) u.email: 'password123',

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../adaptive_colors.dart';
 
-import '../../constants.dart';
 import '../../models/user.dart';
 import '../../services/auth_service.dart';
 import '../../services/feed_service.dart';

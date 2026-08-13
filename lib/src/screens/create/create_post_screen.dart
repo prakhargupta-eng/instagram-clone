@@ -1,11 +1,10 @@
-import 'dart:io';
-import 'dart:typed_data';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:photo_manager/photo_manager.dart';
-import 'package:video_player/video_player.dart' as video;
+import 'package:path_provider/path_provider.dart';
+import 'package:get_thumbnail_video/video_thumbnail.dart';
+import 'package:get_thumbnail_video/index.dart';
 
 import '../../adaptive_colors.dart';
 import '../../constants.dart';
@@ -13,15 +12,15 @@ import '../../models/post.dart';
 import '../../models/story.dart';
 import '../../models/user.dart';
 import '../../services/feed_service.dart';
-import '../../services/local_post_store.dart';
 import '../../widgets/media_image.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:get_thumbnail_video/video_thumbnail.dart';
-import 'package:get_thumbnail_video/index.dart';
+import '../../compontes/ToastHelper.dart';
 import 'post_editor_screen.dart';
 import 'location_picker_sheet.dart';
 import 'music_picker_sheet.dart';
-import '../../compontes/ToastHelper.dart';
+import 'tag_people_sheet.dart';
+import 'components/caption_option.dart';
+import 'components/create_post_helpers.dart';
+import 'components/gallery_thumbnail.dart';
 
 class _MediaSelection {
   const _MediaSelection({
@@ -42,37 +41,6 @@ class _MediaSelection {
   final double contrast;
   final double saturation;
 }
-
-const _mockVideos = <(String, String)>[
-  (
-    'https://test-videos.co.uk/vids/sintel/mp4/h264/720/Sintel_720_10s_1MB.mp4',
-    'https://images.unsplash.com/photo-1541963463532-d68292c34b19?w=400&fit=crop',
-  ),
-  (
-    'https://test-videos.co.uk/vids/sintel/mp4/h264/360/Sintel_360_10s_1MB.mp4',
-    'https://images.unsplash.com/photo-1541963463532-d68292c34b19?w=400&fit=crop',
-  ),
-  (
-    'https://test-videos.co.uk/vids/jellyfish/mp4/h264/360/Jellyfish_360_10s_1MB.mp4',
-    'https://images.unsplash.com/photo-1568430462989-44163eb1752f?w=400&fit=crop',
-  ),
-  (
-    'https://test-videos.co.uk/vids/elephantsdream/mp4/h264/360/ElephantsDream_360_10s_1MB.mp4',
-    'https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=400&fit=crop',
-  ),
-  (
-    'https://test-videos.co.uk/vids/caminandes/mp4/h264/360/Caminandes_360_10s_1MB.mp4',
-    'https://images.unsplash.com/photo-1589182373726-e4f658ab50f0?w=400&fit=crop',
-  ),
-  (
-    'https://www.w3schools.com/html/mov_bbb.mp4',
-    'https://images.unsplash.com/photo-1501854140801-50d01698950b?w=400&fit=crop',
-  ),
-  (
-    'https://media.w3.org/2010/05/sintel/trailer.mp4',
-    'https://images.unsplash.com/photo-1541963463532-d68292c34b19?w=400&fit=crop',
-  ),
-];
 
 class CreatePostScreen extends StatefulWidget {
   const CreatePostScreen({
@@ -99,6 +67,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
   String? _location;
   String? _music;
   String? _musicPreviewUrl;
+  List<AppUser> _taggedPeople = [];
   List<AssetEntity> _assets = const [];
   final ImagePicker _imagePicker = ImagePicker();
 
@@ -166,24 +135,10 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
   }
 
   Future<void> _openEditor({required String url, required bool isVideo}) async {
-    String? editorThumbnail;
-    if (isVideo) {
-      for (final item in _mockVideos) {
-        if (item.$1 == url) {
-          editorThumbnail = item.$2;
-          break;
-        }
-      }
-    }
-
     final edited = await Navigator.of(context).push<String>(
       MaterialPageRoute(
         fullscreenDialog: true,
-        builder: (_) => PostEditorScreen(
-          mediaUrl: url,
-          isVideo: isVideo,
-          thumbnailUrl: editorThumbnail,
-        ),
+        builder: (_) => PostEditorScreen(mediaUrl: url, isVideo: isVideo),
       ),
     );
     if (edited == null || !mounted) return;
@@ -226,30 +181,19 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
       if (returnedThumbnail != null && returnedThumbnail.isNotEmpty) {
         thumb = returnedThumbnail;
       } else {
-        (String, String)? match;
-        for (final item in _mockVideos) {
-          if (item.$1 == url) {
-            match = item;
-            break;
-          }
-        }
-        if (match != null) {
-          thumb = match.$2;
-        } else {
-          try {
-            final tempDir = await getTemporaryDirectory();
-            final xFile = await VideoThumbnail.thumbnailFile(
-              video: finalUrl,
-              thumbnailPath: tempDir.path,
-              imageFormat: ImageFormat.JPEG,
-              maxWidth: 600,
-              quality: 75,
-            );
-            thumb = xFile.path;
-          } catch (_) {
-            thumb =
-                'https://picsum.photos/seed/vid_${DateTime.now().millisecondsSinceEpoch}/600/600';
-          }
+        try {
+          final tempDir = await getTemporaryDirectory();
+          final xFile = await VideoThumbnail.thumbnailFile(
+            video: finalUrl,
+            thumbnailPath: tempDir.path,
+            imageFormat: ImageFormat.JPEG,
+            maxWidth: 600,
+            quality: 75,
+          );
+          thumb = (xFile as String?) ?? finalUrl;
+        } catch (_) {
+          thumb =
+              'https://picsum.photos/seed/vid_${DateTime.now().millisecondsSinceEpoch}/600/600';
         }
       }
     }
@@ -350,6 +294,21 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
     }
   }
 
+  Future<void> _pickTaggedPeople() async {
+    final result = await showModalBottomSheet<List<AppUser>>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: context.surfaceColor,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (_) => TagPeopleSheet(initialTagged: _taggedPeople),
+    );
+    if (result != null && mounted) {
+      setState(() => _taggedPeople = result);
+    }
+  }
+
   void _share() {
     final selection = _selected!;
     final previewImage = selection.thumbnail;
@@ -378,6 +337,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
         location: _location,
         music: _music,
         musicPreviewUrl: _musicPreviewUrl,
+        taggedUsers: _taggedPeople,
         createdAt: DateTime.now(),
         isVideo: selection.isVideo,
         filterIndex: selection.filterIndex,
@@ -492,19 +452,19 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                     child: Row(
                       children: [
                         const SizedBox(width: 12),
-                        _HeaderChip(
+                        HeaderChip(
                           icon: Icons.camera_alt_outlined,
                           label: 'Camera',
                           onTap: () => _pickImage(ImageSource.camera),
                         ),
                         const SizedBox(width: 8),
-                        _HeaderChip(
+                        HeaderChip(
                           icon: Icons.videocam_outlined,
                           label: 'Record Video',
                           onTap: () => _pickVideo(ImageSource.camera),
                         ),
                         const SizedBox(width: 8),
-                        _HeaderChip(
+                        HeaderChip(
                           icon: Icons.video_library_outlined,
                           label: 'Upload Video',
                           onTap: () => _pickVideo(ImageSource.gallery),
@@ -553,7 +513,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
               : SliverGrid(
                   delegate: SliverChildBuilderDelegate((context, index) {
                     final asset = _assets[index];
-                    return _GalleryThumbnail(
+                    return GalleryThumbnail(
                       asset: asset,
                       onTap: () => _pickFromGalleryAsset(asset),
                     );
@@ -564,87 +524,6 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                     crossAxisSpacing: 1.5,
                   ),
                 ),
-        ),
-
-        // ── Videos section ─────────────────────────────────────────
-        SliverToBoxAdapter(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(14, 20, 14, 10),
-                child: Text(
-                  'Videos',
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                    color: context.textPrimaryColor,
-                  ),
-                ),
-              ),
-              SizedBox(
-                height: 124,
-                child: ListView(
-                  scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  children: [
-                    for (final (videoUrl, thumbnail) in _mockVideos)
-                      GestureDetector(
-                        onTap: () => _openEditor(url: videoUrl, isVideo: true),
-                        child: Container(
-                          width: 100,
-                          height: 124,
-                          margin: const EdgeInsets.only(right: 8),
-                          clipBehavior: Clip.antiAlias,
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(6),
-                            color: context.borderColor,
-                          ),
-                          child: Stack(
-                            fit: StackFit.expand,
-                            children: [
-                              CachedNetworkImage(
-                                imageUrl: thumbnail,
-                                fit: BoxFit.cover,
-                              ),
-                              Container(
-                                decoration: const BoxDecoration(
-                                  gradient: LinearGradient(
-                                    begin: Alignment.topCenter,
-                                    end: Alignment.bottomCenter,
-                                    colors: [
-                                      Colors.transparent,
-                                      Colors.black54,
-                                    ],
-                                  ),
-                                ),
-                              ),
-                              const Center(
-                                child: Icon(
-                                  Icons.play_circle_fill,
-                                  color: Colors.white,
-                                  size: 34,
-                                ),
-                              ),
-                              const Positioned(
-                                bottom: 6,
-                                right: 6,
-                                child: Icon(
-                                  Icons.videocam_outlined,
-                                  color: Colors.white,
-                                  size: 16,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 24),
-            ],
-          ),
         ),
       ],
     );
@@ -660,7 +539,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _AvatarSmall(url: widget.currentUser.avatarUrl),
+              AvatarSmall(url: widget.currentUser.avatarUrl),
               const SizedBox(width: 12),
               Expanded(
                 child: TextField(
@@ -724,15 +603,29 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
         const SizedBox(height: 12),
         Divider(height: 0.5, thickness: 0.5, color: context.borderColor),
 
-        // ── Tag / Location options ───────────────────────────────────
-        _CaptionOption(
-          icon: Icons.person_outline,
-          label: 'Tag people',
-          onTap: () {},
-        ),
+        if (_taggedPeople.isNotEmpty)
+          CaptionOption(
+            icon: Icons.person,
+            label: _taggedPeople.map((u) => '@${u.username}').join(', '),
+            trailing: IconButton(
+              icon: Icon(
+                Icons.close,
+                size: 18,
+                color: context.textSecondaryColor,
+              ),
+              onPressed: () => setState(() => _taggedPeople.clear()),
+            ),
+            onTap: _pickTaggedPeople,
+          )
+        else
+          CaptionOption(
+            icon: Icons.person_outline,
+            label: 'Tag people',
+            onTap: _pickTaggedPeople,
+          ),
         Divider(height: 0.5, thickness: 0.5, color: context.borderColor),
         if (_location != null)
-          _CaptionOption(
+          CaptionOption(
             icon: Icons.location_on,
             label: _location!,
             trailing: IconButton(
@@ -746,14 +639,14 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
             onTap: _pickLocation,
           ),
         if (_location == null)
-          _CaptionOption(
+          CaptionOption(
             icon: Icons.location_on_outlined,
             label: 'Add location',
             onTap: _pickLocation,
           ),
         Divider(height: 0.5, thickness: 0.5, color: context.borderColor),
         if (_music != null)
-          _CaptionOption(
+          CaptionOption(
             icon: Icons.music_note,
             label: _music!,
             trailing: IconButton(
@@ -770,242 +663,13 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
             onTap: _pickMusic,
           ),
         if (_music == null)
-          _CaptionOption(
+          CaptionOption(
             icon: Icons.music_note_outlined,
             label: 'Add music',
             onTap: _pickMusic,
           ),
         Divider(height: 0.5, thickness: 0.5, color: context.borderColor),
       ],
-    );
-  }
-}
-
-class _VideoPreview extends StatefulWidget {
-  const _VideoPreview({required this.url});
-
-  final String url;
-
-  @override
-  State<_VideoPreview> createState() => _VideoPreviewState();
-}
-
-class _VideoPreviewState extends State<_VideoPreview> {
-  video.VideoPlayerController? _controller;
-
-  @override
-  void initState() {
-    super.initState();
-    final path = widget.url;
-    _controller =
-        LocalPostStore.isLocalPath(path)
-              ? video.VideoPlayerController.file(File(path))
-              : video.VideoPlayerController.networkUrl(Uri.parse(path))
-          ..initialize()
-              .then((_) {
-                if (!mounted) return;
-                _controller?.setLooping(true);
-                _controller?.setVolume(0);
-                _controller?.play();
-                setState(() {});
-              })
-              .catchError((_) {
-                if (!mounted) return;
-                setState(() {});
-              });
-  }
-
-  @override
-  void dispose() {
-    _controller?.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final controller = _controller;
-    if (controller == null || !controller.value.isInitialized) {
-      return Container(
-        color: AppColors.background,
-        alignment: Alignment.center,
-        child: const CircularProgressIndicator(color: AppColors.primary),
-      );
-    }
-    return video.VideoPlayer(controller);
-  }
-}
-
-// ── Header action chip ────────────────────────────────────────────────────────
-
-class _HeaderChip extends StatelessWidget {
-  const _HeaderChip({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(
-          color: context.backgroundColor,
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 16, color: context.textPrimaryColor),
-            const SizedBox(width: 4),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-                color: context.textPrimaryColor,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _GalleryThumbnail extends StatelessWidget {
-  const _GalleryThumbnail({required this.asset, required this.onTap});
-
-  final AssetEntity asset;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final isVideo = asset.type == AssetType.video;
-    return GestureDetector(
-      onTap: onTap,
-      child: FutureBuilder<Uint8List?>(
-        future: asset.thumbnailDataWithSize(const ThumbnailSize(600, 600)),
-        builder: (context, snapshot) {
-          final data = snapshot.data;
-          if (data == null) {
-            return Container(
-              color: context.backgroundColor,
-              alignment: Alignment.center,
-              child: Icon(
-                isVideo ? Icons.movie_outlined : Icons.image_outlined,
-                color: context.textSecondaryColor,
-              ),
-            );
-          }
-          return Stack(
-            fit: StackFit.expand,
-            children: [
-              Image.memory(data, fit: BoxFit.cover),
-              if (isVideo)
-                Center(
-                  child: Container(
-                    padding: const EdgeInsets.all(6),
-                    decoration: const BoxDecoration(
-                      color: Colors.black38,
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.play_arrow,
-                      color: Colors.white,
-                      size: 24,
-                    ),
-                  ),
-                ),
-            ],
-          );
-        },
-      ),
-    );
-  }
-}
-
-class _AvatarSmall extends StatelessWidget {
-  const _AvatarSmall({required this.url});
-
-  final String? url;
-
-  @override
-  Widget build(BuildContext context) {
-    return ClipOval(
-      child: SizedBox(
-        width: 32,
-        height: 32,
-        child: url != null
-            ? CachedNetworkImage(
-                imageUrl: url!,
-                fit: BoxFit.cover,
-                errorWidget: (_, __, ___) => const _FallbackAvatar(),
-              )
-            : const _FallbackAvatar(),
-      ),
-    );
-  }
-}
-
-class _FallbackAvatar extends StatelessWidget {
-  const _FallbackAvatar();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      color: AppColors.primary,
-      alignment: Alignment.center,
-      child: const Icon(Icons.person, color: AppColors.surface, size: 18),
-    );
-  }
-}
-
-// ── Caption option row ────────────────────────────────────────────────────────
-
-class _CaptionOption extends StatelessWidget {
-  const _CaptionOption({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-    this.trailing,
-  });
-
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-  final Widget? trailing;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        child: Row(
-          children: [
-            Icon(icon, size: 22, color: context.textPrimaryColor),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Text(
-                label,
-                style: TextStyle(fontSize: 15, color: context.textPrimaryColor),
-              ),
-            ),
-            trailing ??
-                Icon(
-                  Icons.chevron_right,
-                  size: 22,
-                  color: context.textSecondaryColor,
-                ),
-          ],
-        ),
-      ),
     );
   }
 }

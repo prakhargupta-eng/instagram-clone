@@ -35,15 +35,18 @@ class PostTile extends StatelessWidget {
         children: [
           Hero(
             tag: 'post_image_${post.id}',
-            child: MediaImage(
-              path: post.imageUrl,
-              videoUrl: post.isVideo ? post.videoUrl : null,
-              fit: BoxFit.cover,
-              errorBuilder: (_, _, _) => Container(
-                color: context.borderColor,
-                child: Icon(
-                  Icons.image_not_supported_outlined,
-                  color: context.textSecondaryColor,
+            child: Material(
+              color: Colors.transparent,
+              child: MediaImage(
+                path: post.imageUrl,
+                videoUrl: post.isVideo ? post.videoUrl : null,
+                fit: BoxFit.cover,
+                errorBuilder: (_, _, _) => Container(
+                  color: context.borderColor,
+                  child: Icon(
+                    Icons.image_not_supported_outlined,
+                    color: context.textSecondaryColor,
+                  ),
                 ),
               ),
             ),

@@ -39,6 +39,7 @@ class Post {
   final String? location;
   final String? music;
   final String? musicPreviewUrl;
+  final List<AppUser> taggedUsers;
   final DateTime createdAt;
   final List<String> likedBy;
   final List<Comment> comments;
@@ -58,6 +59,7 @@ class Post {
     this.location,
     this.music,
     this.musicPreviewUrl,
+    this.taggedUsers = const [],
     this.likedBy = const [],
     this.comments = const [],
     this.isVideo = false,
@@ -81,6 +83,9 @@ class Post {
       location: json['location'],
       music: json['music'],
       musicPreviewUrl: json['musicPreviewUrl'],
+      taggedUsers: (json['taggedUsers'] as List? ?? [])
+          .map((e) => AppUser.fromJson(e as Map<String, dynamic>))
+          .toList(),
       createdAt: DateTime.parse(json['createdAt']),
       likedBy: List<String>.from(json['likedBy'] ?? []),
       comments: (json['comments'] as List? ?? [])
@@ -103,6 +108,7 @@ class Post {
         'location': location,
         'music': music,
         'musicPreviewUrl': musicPreviewUrl,
+        'taggedUsers': taggedUsers.map((u) => u.toJson()).toList(),
         'createdAt': createdAt.toIso8601String(),
         'likedBy': likedBy,
         'comments': comments.map((c) => c.toJson()).toList(),
@@ -119,6 +125,7 @@ class Post {
     String? location,
     String? music,
     String? musicPreviewUrl,
+    List<AppUser>? taggedUsers,
     List<String>? likedBy,
     List<Comment>? comments,
     String? videoUrl,
@@ -137,6 +144,7 @@ class Post {
       location: location ?? this.location,
       music: music ?? this.music,
       musicPreviewUrl: musicPreviewUrl ?? this.musicPreviewUrl,
+      taggedUsers: taggedUsers ?? this.taggedUsers,
       createdAt: createdAt,
       likedBy: likedBy ?? this.likedBy,
       comments: comments ?? this.comments,

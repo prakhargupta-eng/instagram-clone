@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
 import '../models/user.dart';
@@ -30,7 +31,7 @@ class SqlDatabaseHelper {
     if (isTesting) {
       return await openDatabase(
         inMemoryDatabasePath,
-        version: 2,
+        version: 1,
         onCreate: _createDB,
       );
     }
@@ -39,82 +40,9 @@ class SqlDatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 2,
+      version: 1,
       onCreate: _createDB,
-      onUpgrade: _onUpgrade,
-      onOpen: (db) async {
-        await _cleanExistingVideoUrls(db);
-      },
     );
-  }
-
-  Future<void> _cleanExistingVideoUrls(Database db) async {
-    try {
-      final List<Map<String, dynamic>> maps = await db.query('posts');
-      for (final map in maps) {
-        final String videoUrl = map['videoUrl'] as String? ?? '';
-        final String imageUrl = map['imageUrl'] as String? ?? '';
-
-        bool needsUpdate = false;
-        final updatedMap = <String, dynamic>{};
-
-        if (videoUrl.contains('?') || videoUrl.startsWith('file://')) {
-          var cleanVideoUrl = videoUrl;
-          if (cleanVideoUrl.contains('?')) {
-            cleanVideoUrl = cleanVideoUrl.split('?').first;
-          }
-          if (cleanVideoUrl.startsWith('file://')) {
-            try {
-              cleanVideoUrl = Uri.parse(cleanVideoUrl).toFilePath();
-            } catch (_) {}
-          }
-          updatedMap['videoUrl'] = cleanVideoUrl;
-          needsUpdate = true;
-        }
-
-        if (imageUrl.contains('?') || imageUrl.startsWith('file://')) {
-          var cleanImageUrl = imageUrl;
-          if (cleanImageUrl.contains('?')) {
-            cleanImageUrl = cleanImageUrl.split('?').first;
-          }
-          if (cleanImageUrl.startsWith('file://')) {
-            try {
-              cleanImageUrl = Uri.parse(cleanImageUrl).toFilePath();
-            } catch (_) {}
-          }
-          updatedMap['imageUrl'] = cleanImageUrl;
-          needsUpdate = true;
-        }
-
-        if (needsUpdate) {
-          await db.update(
-            'posts',
-            updatedMap,
-            where: 'id = ?',
-            whereArgs: [map['id']],
-          );
-        }
-      }
-    } catch (e) {
-      print('Error cleaning existing video URLs: $e');
-    }
-  }
-
-  Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
-    if (oldVersion < 2) {
-      await db.execute(
-        'ALTER TABLE posts ADD COLUMN filterIndex INTEGER DEFAULT 0',
-      );
-      await db.execute(
-        'ALTER TABLE posts ADD COLUMN brightness REAL DEFAULT 0.0',
-      );
-      await db.execute(
-        'ALTER TABLE posts ADD COLUMN contrast REAL DEFAULT 1.0',
-      );
-      await db.execute(
-        'ALTER TABLE posts ADD COLUMN saturation REAL DEFAULT 1.0',
-      );
-    }
   }
 
   Future<void> _createDB(Database db, int version) async {
@@ -167,7 +95,8 @@ class SqlDatabaseHelper {
         filterIndex INTEGER DEFAULT 0,
         brightness REAL DEFAULT 0.0,
         contrast REAL DEFAULT 1.0,
-        saturation REAL DEFAULT 1.0
+        saturation REAL DEFAULT 1.0,
+        taggedUsers TEXT
       )
     ''');
 
@@ -419,6 +348,7 @@ class SqlDatabaseHelper {
       'brightness': post.brightness,
       'contrast': post.contrast,
       'saturation': post.saturation,
+      'taggedUsers': jsonEncode(post.taggedUsers.map((u) => u.toJson()).toList()),
     };
     print('DB Insert Post: $postMap');
     await db.insert(
@@ -465,6 +395,16 @@ class SqlDatabaseHelper {
 
       final comments = await getCommentsForPost(postId);
 
+      List<AppUser> taggedUsers = [];
+      if (map['taggedUsers'] != null && (map['taggedUsers'] as String).isNotEmpty) {
+        try {
+          final list = jsonDecode(map['taggedUsers'] as String) as List;
+          taggedUsers = list
+              .map((e) => AppUser.fromJson(e as Map<String, dynamic>))
+              .toList();
+        } catch (_) {}
+      }
+
       posts.add(
         Post(
           id: postId,
@@ -475,6 +415,7 @@ class SqlDatabaseHelper {
           location: map['location'] as String?,
           music: map['music'] as String?,
           musicPreviewUrl: map['musicPreviewUrl'] as String?,
+          taggedUsers: taggedUsers,
           createdAt: DateTime.parse(map['createdAt'] as String),
           likedBy: likedBy,
           comments: comments,
