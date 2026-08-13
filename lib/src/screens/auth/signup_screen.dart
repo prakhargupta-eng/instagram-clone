@@ -6,6 +6,7 @@ import '../../constants.dart';
 import '../../widgets/insta_logo.dart';
 import '../../services/auth_service.dart';
 import '../../utils/validation.dart';
+import 'package:instagram_clone/src/compontes/ToastHelper.dart';
 
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key, required this.authService});
@@ -49,6 +50,7 @@ class _SignupScreenState extends State<SignupScreen> {
     );
     if (!mounted) return;
     if (result.success) {
+      ToastHelper.showToast(context, 'Account created successfully!');
       FocusScope.of(context).unfocus();
       Navigator.of(context).pop();
       return;
@@ -57,6 +59,9 @@ class _SignupScreenState extends State<SignupScreen> {
       _loading = false;
       _error = result.error;
     });
+    if (result.error != null) {
+      ToastHelper.showToast(context, result.error!);
+    }
   }
 
   void _clearServerError() {

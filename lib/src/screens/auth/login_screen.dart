@@ -79,6 +79,9 @@ class _LoginScreenState extends State<LoginScreen> {
           setState(() {
             _error = state.error;
           });
+          ToastHelper.showToast(context, state.error);
+        } else if (state is AuthAuthenticated) {
+          ToastHelper.showToast(context, 'Login successful!');
         }
       },
       child: GestureDetector(

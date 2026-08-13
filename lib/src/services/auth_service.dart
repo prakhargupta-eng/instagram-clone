@@ -4,7 +4,7 @@ import 'package:flutter/foundation.dart';
 import '../constants.dart';
 import '../data/mock_data.dart';
 import '../models/user.dart';
-import 'sql_database_helper.dart';
+import 'api_service.dart';
 
 class AuthResult {
   final bool success;
@@ -34,59 +34,39 @@ class AuthService extends ChangeNotifier {
 
   static final RegExp _emailRegex = RegExp(r'^[\w\.\-]+@[\w\-]+\.\w+$');
 
-  /// Restores the persisted session (called once at startup).
+  /// Restores the persisted session from API / SharedPreferences (called once at startup).
   Future<void> init() async {
     if (_initialized) return;
     _initialized = true;
     try {
-      final db = SqlDatabaseHelper.instance;
+      // SQFlite local database call commented out in favor of REST API:
+      // final db = SqlDatabaseHelper.instance;
 
-      // Seed mock users on first run if database is empty
-      final existingUsers = await db.getAllUsers();
-      if (existingUsers.isEmpty) {
-        for (final user in MockDatabase.users) {
-          await db.insertUser(user);
-          await db.setPassword(user.email, 'password123');
-        }
-      }
-
-      _registeredUsers
-        ..clear()
-        ..addAll(await db.getAllUsers());
-
-      _passwords
-        ..clear()
-        ..addAll(await db.getAllCredentials());
-
-      final sessionUserId = await db.getSessionUserId();
-      if (sessionUserId != null) {
-        _currentUser = _registeredUsers.where((u) => u.id == sessionUserId).firstOrNull;
-        if (_currentUser == null) {
-          _currentUser = await db.getUser(sessionUserId);
-        }
-        if (_currentUser != null) {
-          _sessionKey = DateTime.now().millisecondsSinceEpoch.toString();
-        }
+      await ApiService.instance.initSession();
+      _currentUser = ApiService.instance.currentUser;
+      if (_currentUser != null) {
+        _sessionKey = DateTime.now().millisecondsSinceEpoch.toString();
       }
     } catch (e) {
-      debugPrint('AuthService init error: $e');
+      debugPrint('AuthService init REST error: $e');
     }
     notifyListeners();
   }
 
   Future<void> _saveSession(AppUser user) async {
-    final db = SqlDatabaseHelper.instance;
-    await db.insertUser(user);
-    await db.saveSession(user.id);
+    // SQFlite local database call commented out:
+    // final db = SqlDatabaseHelper.instance;
+    // await db.insertUser(user);
+    // await db.saveSession(user.id);
   }
 
   Future<void> _clearSession() async {
-    final db = SqlDatabaseHelper.instance;
-    await db.clearSession();
+    // SQFlite local database call commented out:
+    // final db = SqlDatabaseHelper.instance;
+    // await db.clearSession();
   }
 
   Future<AuthResult> login(String email, String password) async {
-    await Future.delayed(const Duration(milliseconds: 600));
     final normalized = email.trim().toLowerCase();
     if (normalized.isEmpty || password.isEmpty) {
       return const AuthResult(success: false, error: AppStrings.fillAllFields);
@@ -94,20 +74,19 @@ class AuthService extends ChangeNotifier {
     if (!_emailRegex.hasMatch(normalized)) {
       return const AuthResult(success: false, error: AppStrings.invalidEmail);
     }
-    final user = _registeredUsers
-        .where((u) => u.email == normalized)
-        .firstOrNull;
-    if (user == null || _passwords[normalized] != password) {
-      return const AuthResult(
-        success: false,
-        error: AppStrings.wrongCredentials,
+
+    try {
+      final user = await ApiService.instance.login(
+        email: normalized,
+        password: password,
       );
+      _currentUser = user;
+      _sessionKey = DateTime.now().millisecondsSinceEpoch.toString();
+      notifyListeners();
+      return AuthResult(success: true, user: user);
+    } catch (apiError) {
+      return AuthResult(success: false, error: apiError.toString());
     }
-    _currentUser = user;
-    _sessionKey = DateTime.now().millisecondsSinceEpoch.toString();
-    await _saveSession(user);
-    notifyListeners();
-    return AuthResult(success: true, user: user);
   }
 
   Future<AuthResult> signup({
@@ -116,7 +95,6 @@ class AuthService extends ChangeNotifier {
     required String fullName,
     required String password,
   }) async {
-    await Future.delayed(const Duration(milliseconds: 600));
     final normalizedEmail = email.trim().toLowerCase();
     final normalizedUsername = username.trim().toLowerCase();
     if (normalizedEmail.isEmpty ||
@@ -128,62 +106,51 @@ class AuthService extends ChangeNotifier {
     if (!_emailRegex.hasMatch(normalizedEmail)) {
       return const AuthResult(success: false, error: AppStrings.invalidEmail);
     }
-    if (_registeredUsers.any((u) => u.email == normalizedEmail)) {
-      return const AuthResult(
-        success: false,
-        error: AppStrings.emailAlreadyTaken,
-      );
-    }
-    if (_registeredUsers.any((u) => u.username == normalizedUsername)) {
-      return const AuthResult(
-        success: false,
-        error: AppStrings.usernameAlreadyTaken,
-      );
-    }
     if (password.length < 6) {
       return const AuthResult(
         success: false,
         error: AppStrings.passwordTooShort,
       );
     }
-    final user = AppUser(
-      id: 'u${DateTime.now().millisecondsSinceEpoch}',
-      username: normalizedUsername,
-      fullName: fullName.trim(),
-      email: normalizedEmail,
-      bio: '',
-      avatarUrl: 'https://i.pravatar.cc/300?u=$normalizedUsername',
-    );
-    _registeredUsers.add(user);
-    _passwords[normalizedEmail] = password;
-    _currentUser = user;
-    _sessionKey = DateTime.now().millisecondsSinceEpoch.toString();
-    
-    final db = SqlDatabaseHelper.instance;
-    await db.insertUser(user);
-    await db.setPassword(normalizedEmail, password);
-    await db.saveSession(user.id);
-    notifyListeners();
-    return AuthResult(success: true, user: user);
+
+    try {
+      final user = await ApiService.instance.register(
+        username: normalizedUsername,
+        fullName: fullName.trim(),
+        email: normalizedEmail,
+        password: password,
+      );
+      _currentUser = user;
+      _sessionKey = DateTime.now().millisecondsSinceEpoch.toString();
+      notifyListeners();
+      return AuthResult(success: true, user: user);
+    } catch (apiError) {
+      return AuthResult(success: false, error: apiError.toString());
+    }
   }
 
   Future<void> logout() async {
     _currentUser = null;
-    await _clearSession();
+    await ApiService.instance.logout();
+    // SQFlite call commented out:
+    // await _clearSession();
     notifyListeners();
   }
 
   Future<void> deleteAccount() async {
     final id = _currentUser?.id;
     if (id == null) return;
+    try {
+      await ApiService.instance.deleteAccount();
+    } catch (e) {
+      debugPrint('REST API deleteAccount error: $e');
+    }
     _registeredUsers.removeWhere((u) => u.id == id);
-    final email = _currentUser?.email;
-    if (email != null) _passwords.remove(email);
     _currentUser = null;
-    final db = SqlDatabaseHelper.instance;
-    await db.deleteUser(id);
-    if (email != null) await db.deletePassword(email);
-    await db.clearSession();
+    // SQFlite calls commented out:
+    // final db = SqlDatabaseHelper.instance;
+    // await db.deleteUser(id);
+    // await db.clearSession();
     notifyListeners();
   }
 
@@ -211,16 +178,27 @@ class AuthService extends ChangeNotifier {
       );
     }
     _passwords[email] = newPassword;
-    await SqlDatabaseHelper.instance.setPassword(email, newPassword);
+    // SQFlite call commented out:
+    // await SqlDatabaseHelper.instance.setPassword(email, newPassword);
     notifyListeners();
     return AuthResult(success: true, user: user);
   }
 
-  void updateCurrentUser(AppUser updated) {
+  void updateCurrentUser(AppUser updated) async {
     final index = _registeredUsers.indexWhere((u) => u.id == updated.id);
     if (index != -1) _registeredUsers[index] = updated;
     _currentUser = updated;
-    _saveSession(updated);
     notifyListeners();
+
+    try {
+      await ApiService.instance.updateProfile(
+        fullName: updated.fullName,
+        bio: updated.bio,
+        avatarUrl: updated.avatarUrl,
+        username: updated.username,
+      );
+    } catch (e) {
+      debugPrint('REST API updateProfile error: $e');
+    }
   }
 }

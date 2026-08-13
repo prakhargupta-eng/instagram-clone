@@ -1,12 +1,11 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 
-import '../data/mock_data.dart';
 import '../models/post.dart';
 import '../models/story.dart';
 import '../models/user.dart';
+import 'api_service.dart';
 import 'local_post_store.dart';
-import 'sql_database_helper.dart';
 
 class FeedService extends ChangeNotifier {
   final List<Post> _posts = [];
@@ -36,17 +35,26 @@ class FeedService extends ChangeNotifier {
   void ensureUserRegistered(AppUser user) {
     if (!_usersById.containsKey(user.id)) {
       _usersById[user.id] = user;
-      SqlDatabaseHelper.instance.insertUser(user);
+      // SQFlite local database call commented out:
+      // SqlDatabaseHelper.instance.insertUser(user);
     }
   }
 
   Future<void> refreshFeed() async {
     _isLoading = true;
     notifyListeners();
-    // Simulated API call latency (3 seconds)
-    await Future.delayed(const Duration(seconds: 3));
-    _isLoading = false;
-    notifyListeners();
+    try {
+      final remotePosts = await ApiService.instance.getFeedPosts();
+      if (remotePosts.isNotEmpty) {
+        _posts.clear();
+        _posts.addAll(remotePosts);
+      }
+    } catch (e) {
+      debugPrint('REST API Feed fetch error: $e');
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
   }
 
   Future<void> ensureLocalPostsLoaded(AppUser currentUser) async {
@@ -57,57 +65,18 @@ class FeedService extends ChangeNotifier {
     ensureUserRegistered(currentUser);
 
     try {
-      // Simulated API call latency for initial load (3 seconds)
-      await Future.delayed(const Duration(seconds: 3));
-
-      final db = SqlDatabaseHelper.instance;
-
-      // Seed posts if empty
-      final existingPosts = await db.getAllPosts();
-      if (existingPosts.isEmpty) {
-        for (final post in MockDatabase.posts) {
-          await db.insertPost(post);
-        }
-      }
-
-      // Seed follows if empty
-      final existingFollows = await db.getAllFollows();
-      if (existingFollows.isEmpty) {
-        for (final entry in MockDatabase.follows.entries) {
-          for (final followingId in entry.value) {
-            await db.insertFollow(entry.key, followingId);
-          }
-        }
-      }
-
-      // Seed stories if empty
-      final existingStories = await db.getAllStories();
-      if (existingStories.isEmpty) {
-        for (final story in MockDatabase.stories) {
-          await db.insertStory(story);
-        }
-      }
-
-      // Load all from SQLite
+      final remotePosts = await ApiService.instance.getFeedPosts();
       _posts.clear();
-      _posts.addAll(await db.getAllPosts());
+      _posts.addAll(remotePosts);
 
-      _stories.clear();
-      _stories.addAll(await db.getAllStories());
-
-      _watchedStoryIds.clear();
-      _watchedStoryIds.addAll(await db.getWatchedStoryIds());
-
-      _follows.clear();
-      _follows.addAll(await db.getAllFollows());
-
-      final allUsers = await db.getAllUsers();
-      _usersById.clear();
-      for (final user in allUsers) {
-        _usersById[user.id] = user;
-      }
+      // SQFlite local database queries commented out:
+      // final db = SqlDatabaseHelper.instance;
+      // _posts.clear();
+      // _posts.addAll(await db.getAllPosts());
+      // _stories.clear();
+      // _stories.addAll(await db.getAllStories());
     } catch (e) {
-      debugPrint('FeedService init error: $e');
+      debugPrint('FeedService init REST error: $e');
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -124,22 +93,25 @@ class FeedService extends ChangeNotifier {
     return null;
   }
 
-  List<String> followingIdsOf(String userId) => _follows[userId] ?? const [];
+  List<String> followingIdsOf(String userId) {
+    return _follows[userId] ?? const [];
+  }
 
   bool isFollowing(String followerId, String followeeId) =>
       followingIdsOf(followerId).contains(followeeId);
 
-  void toggleFollow(String followerId, String followeeId) {
+  void toggleFollow(String followerId, String followeeId) async {
     final list = List<String>.from(followingIdsOf(followerId));
     final wasFollowing = list.contains(followeeId);
-    final db = SqlDatabaseHelper.instance;
 
     if (wasFollowing) {
       list.remove(followeeId);
-      db.deleteFollow(followerId, followeeId);
+      // SQFlite call commented out:
+      // db.deleteFollow(followerId, followeeId);
     } else {
       list.insert(0, followeeId);
-      db.insertFollow(followerId, followeeId);
+      // SQFlite call commented out:
+      // db.insertFollow(followerId, followeeId);
     }
     _follows[followerId] = list;
 
@@ -150,16 +122,20 @@ class FeedService extends ChangeNotifier {
         following: (follower.following + (wasFollowing ? -1 : 1)).clamp(0, 999999),
       );
       _usersById[followerId] = updatedFollower;
-      db.insertUser(updatedFollower);
     }
     if (followee != null) {
       final updatedFollowee = followee.copyWith(
         followers: (followee.followers + (wasFollowing ? -1 : 1)).clamp(0, 999999),
       );
       _usersById[followeeId] = updatedFollowee;
-      db.insertUser(updatedFollowee);
     }
     notifyListeners();
+
+    try {
+      await ApiService.instance.toggleFollow(followeeId);
+    } catch (e) {
+      debugPrint('REST API toggleFollow error: $e');
+    }
   }
 
   List<Post> followingFeed(AppUser user) {
@@ -183,11 +159,7 @@ class FeedService extends ChangeNotifier {
         return bLikes.compareTo(aLikes);
       });
 
-    final result = <Post>[
-      ...followedPosts.toList()..sort((a, b) => b.createdAt.compareTo(a.createdAt)),
-      ...othersSorted,
-    ];
-    return result;
+    return [...followedPosts, ...othersSorted];
   }
 
   final Set<String> _watchedStoryIds = {};
@@ -197,7 +169,8 @@ class FeedService extends ChangeNotifier {
   void markStoryAsWatched(String storyId) {
     if (!_watchedStoryIds.contains(storyId)) {
       _watchedStoryIds.add(storyId);
-      SqlDatabaseHelper.instance.markStoryAsWatched(storyId);
+      // SQFlite call commented out:
+      // SqlDatabaseHelper.instance.markStoryAsWatched(storyId);
       notifyListeners();
     }
   }
@@ -237,26 +210,33 @@ class FeedService extends ChangeNotifier {
     return uniqueResult;
   }
 
-  void toggleLike(String postId, String userId) {
+  void toggleLike(String postId, String userId) async {
     final index = _posts.indexWhere((p) => p.id == postId);
     if (index == -1) return;
     final post = _posts[index];
     final liked = post.likedBy.contains(userId);
     final likedBy = List<String>.of(post.likedBy);
-    final db = SqlDatabaseHelper.instance;
 
     if (liked) {
       likedBy.remove(userId);
-      db.removeLike(postId, userId);
+      // SQFlite call commented out:
+      // db.removeLike(postId, userId);
     } else {
       likedBy.insert(0, userId);
-      db.addLike(postId, userId);
+      // SQFlite call commented out:
+      // db.addLike(postId, userId);
     }
     _posts[index] = post.copyWith(likedBy: likedBy);
     notifyListeners();
+
+    try {
+      await ApiService.instance.toggleLike(postId);
+    } catch (e) {
+      debugPrint('REST API toggleLike error: $e');
+    }
   }
 
-  void addComment(String postId, AppUser author, String text) {
+  void addComment(String postId, AppUser author, String text) async {
     final index = _posts.indexWhere((p) => p.id == postId);
     if (index == -1 || text.trim().isEmpty) return;
     final post = _posts[index];
@@ -270,27 +250,61 @@ class FeedService extends ChangeNotifier {
     comments.add(newComment);
     _posts[index] = post.copyWith(comments: comments);
 
-    SqlDatabaseHelper.instance.insertComment(postId, newComment);
+    // SQFlite call commented out:
+    // SqlDatabaseHelper.instance.insertComment(postId, newComment);
     notifyListeners();
+
+    try {
+      await ApiService.instance.addComment(postId, text);
+    } catch (e) {
+      debugPrint('REST API addComment error: $e');
+    }
   }
 
-  void addPost(Post post) {
+  void addPost(Post post) async {
     _posts.insert(0, post);
-    SqlDatabaseHelper.instance.insertPost(post);
+    // SQFlite call commented out:
+    // SqlDatabaseHelper.instance.insertPost(post);
     notifyListeners();
+
+    try {
+      final taggedUserIds = post.taggedUsers.map((u) => u.id).toList();
+      await ApiService.instance.createPost(
+        imageUrl: post.imageUrl,
+        videoUrl: post.videoUrl,
+        caption: post.caption,
+        location: post.location,
+        music: post.music,
+        isVideo: post.isVideo,
+        taggedUserIds: taggedUserIds,
+      );
+    } catch (e) {
+      debugPrint('REST API createPost error: $e');
+    }
   }
 
   void deletePost(String postId) {
     _posts.removeWhere((p) => p.id == postId);
     LocalPostStore.instance.delete(postId);
-    SqlDatabaseHelper.instance.deletePost(postId);
+    // SQFlite call commented out:
+    // SqlDatabaseHelper.instance.deletePost(postId);
     notifyListeners();
   }
 
-  void addStory(Story story) {
+  void addStory(Story story) async {
     _stories.insert(0, story);
-    SqlDatabaseHelper.instance.insertStory(story);
+    // SQFlite call commented out:
+    // SqlDatabaseHelper.instance.insertStory(story);
     notifyListeners();
+
+    try {
+      await ApiService.instance.createStory(
+        imageUrl: story.imageUrl,
+        isVideo: story.isVideo,
+      );
+    } catch (e) {
+      debugPrint('REST API createStory error: $e');
+    }
   }
 
   final List<PendingUpload> _pendingUploads = [];
