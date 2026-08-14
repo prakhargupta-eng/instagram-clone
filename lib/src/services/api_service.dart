@@ -72,7 +72,12 @@ class ApiService extends ChangeNotifier {
 
   // ── LOGGING HELPERS ─────────────────────────────────────────────────────────
 
-  void _logRequest(String method, String url, {Map<String, String>? headers, dynamic body}) {
+  void _logRequest(
+    String method,
+    String url, {
+    Map<String, String>? headers,
+    dynamic body,
+  }) {
     debugPrint('--------------------------------------------------');
     debugPrint('🌐 [API REQUEST] $method -> $url');
     debugPrint('📌 Base URL: ${ApiEndpoints.baseUrl}');
@@ -82,7 +87,9 @@ class ApiService extends ChangeNotifier {
 
   void _logResponse(http.Response response) {
     debugPrint('--------------------------------------------------');
-    debugPrint('✅ [API RESPONSE] Status Code: ${response.statusCode} | URL: ${response.request?.url}');
+    debugPrint(
+      '✅ [API RESPONSE] Status Code: ${response.statusCode} | URL: ${response.request?.url}',
+    );
     debugPrint('📄 Response Body: ${response.body}');
     debugPrint('--------------------------------------------------');
   }
@@ -109,9 +116,18 @@ class ApiService extends ChangeNotifier {
     }
   }
 
-  Future<http.Response> _httpPost(String url, {dynamic body, bool requireAuth = true}) async {
+  Future<http.Response> _httpPost(
+    String url, {
+    dynamic body,
+    bool requireAuth = true,
+  }) async {
     final headers = _buildHeaders(requireAuth: requireAuth);
-    _logRequest('POST', url, headers: headers, body: body != null ? jsonEncode(body) : null);
+    _logRequest(
+      'POST',
+      url,
+      headers: headers,
+      body: body != null ? jsonEncode(body) : null,
+    );
     try {
       final response = await http.post(
         Uri.parse(url),
@@ -125,9 +141,18 @@ class ApiService extends ChangeNotifier {
     }
   }
 
-  Future<http.Response> _httpPut(String url, {dynamic body, bool requireAuth = true}) async {
+  Future<http.Response> _httpPut(
+    String url, {
+    dynamic body,
+    bool requireAuth = true,
+  }) async {
     final headers = _buildHeaders(requireAuth: requireAuth);
-    _logRequest('PUT', url, headers: headers, body: body != null ? jsonEncode(body) : null);
+    _logRequest(
+      'PUT',
+      url,
+      headers: headers,
+      body: body != null ? jsonEncode(body) : null,
+    );
     try {
       final response = await http.put(
         Uri.parse(url),
@@ -186,10 +211,7 @@ class ApiService extends ChangeNotifier {
       final response = await _httpPost(
         ApiEndpoints.login,
         requireAuth: false,
-        body: {
-          'email': email,
-          'password': password,
-        },
+        body: {'email': email, 'password': password},
       );
 
       final data = _handleResponse(response);
@@ -221,7 +243,7 @@ class ApiService extends ChangeNotifier {
   Future<AppUser> getUserProfile(String userId) async {
     final response = await _httpGet(
       ApiEndpoints.userProfile(userId),
-      requireAuth: false,
+      requireAuth: true,
     );
 
     final data = _handleResponse(response);
@@ -276,16 +298,15 @@ class ApiService extends ChangeNotifier {
     return data['following'] as bool? ?? false;
   }
 
-  /// 2.4 Search Users
-  /// `GET /api/v1/users/search?q=query`
-  Future<List<AppUser>> searchUsers(String query) async {
+  /// 2.4 Search
+  /// `GET /api/v1/search?q=query`
+  Future<List<dynamic>> search(String query) async {
     if (query.trim().isEmpty) return [];
     final response = await _httpGet(
-      ApiEndpoints.searchUsers(query),
-      requireAuth: false,
+      ApiEndpoints.search(query),
+      requireAuth: true,
     );
-    final List<dynamic> data = _handleResponse(response);
-    return data.map((e) => AppUser.fromJson(e as Map<String, dynamic>)).toList();
+    return _handleResponse(response) as List<dynamic>;
   }
 
   // ── 3. POSTS & FEED APIs ──────────────────────────────────────────────────
@@ -293,13 +314,30 @@ class ApiService extends ChangeNotifier {
   /// 3.1 Get Feed Posts
   /// `GET /api/v1/posts/feed`
   Future<List<Post>> getFeedPosts() async {
+    final response = await _httpGet(ApiEndpoints.feed, requireAuth: true);
+
+    final List<dynamic> data = _handleResponse(response);
+    return data
+        .map((json) => Post.fromJson(json as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// 3.2 Get Explore Posts by Category
+  /// `GET /api/v1/posts/explore?category=...&page=...&limit=...`
+  Future<List<Post>> getExplorePostsByCategory(
+    String category, {
+    int page = 1,
+    int limit = 10,
+  }) async {
     final response = await _httpGet(
-      ApiEndpoints.feed,
-      requireAuth: false,
+      ApiEndpoints.exploreCategory(category, page: page, limit: limit),
+      requireAuth: true,
     );
 
     final List<dynamic> data = _handleResponse(response);
-    return data.map((e) => Post.fromJson(e as Map<String, dynamic>)).toList();
+    return data
+        .map((json) => Post.fromJson(json as Map<String, dynamic>))
+        .toList();
   }
 
   /// 3.2 Create Post
@@ -341,7 +379,7 @@ class ApiService extends ChangeNotifier {
   Future<List<Post>> getTaggedPosts(String userId) async {
     final response = await _httpGet(
       ApiEndpoints.taggedPosts(userId),
-      requireAuth: false,
+      requireAuth: true,
     );
 
     final List<dynamic> data = _handleResponse(response);
@@ -351,10 +389,7 @@ class ApiService extends ChangeNotifier {
   /// 3.4 Get Reels Feed
   /// `GET /api/v1/posts/reels`
   Future<List<Post>> getReels() async {
-    final response = await _httpGet(
-      ApiEndpoints.reels,
-      requireAuth: false,
-    );
+    final response = await _httpGet(ApiEndpoints.reels, requireAuth: false);
     final List<dynamic> data = _handleResponse(response);
     return data.map((e) => Post.fromJson(e as Map<String, dynamic>)).toList();
   }
@@ -364,10 +399,7 @@ class ApiService extends ChangeNotifier {
   /// 4.1 Get Stories Feed
   /// `GET /api/v1/stories`
   Future<List<dynamic>> getStories() async {
-    final response = await _httpGet(
-      ApiEndpoints.stories,
-      requireAuth: false,
-    );
+    final response = await _httpGet(ApiEndpoints.stories, requireAuth: false);
     return _handleResponse(response) as List<dynamic>;
   }
 
@@ -380,10 +412,7 @@ class ApiService extends ChangeNotifier {
     final response = await _httpPost(
       ApiEndpoints.stories,
       requireAuth: true,
-      body: {
-        'imageUrl': imageUrl,
-        'isVideo': isVideo,
-      },
+      body: {'imageUrl': imageUrl, 'isVideo': isVideo},
     );
     return _handleResponse(response);
   }
@@ -438,6 +467,9 @@ class ApiService extends ChangeNotifier {
     if (statusCode >= 200 && statusCode < 300) {
       return body;
     } else {
+      if (statusCode == 401) {
+        logout();
+      }
       final errorMessage = (body is Map && body.containsKey('error'))
           ? body['error']
           : 'Server Error ($statusCode)';

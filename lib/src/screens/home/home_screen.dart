@@ -59,6 +59,7 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
     _scrollController.addListener(_onScroll);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !context.mounted) return;
       _onScroll();
     });
   }
@@ -117,7 +118,7 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
   }
 
   void _onScroll() {
-    if (!mounted || _currentFeedList.isEmpty) return;
+    if (!mounted || !context.mounted || _currentFeedList.isEmpty) return;
     final screenCenterY = MediaQuery.of(context).size.height / 2;
 
     String? closestPostId;
@@ -218,6 +219,9 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
 
   @override
   Widget build(BuildContext context) {
+    if (widget.authService.currentUser == null) {
+      return Scaffold(backgroundColor: context.backgroundColor);
+    }
     return Scaffold(
       backgroundColor: context.backgroundColor,
       appBar: AppBar(
@@ -319,6 +323,7 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
         enabled: isLoading,
         enableSwitchAnimation: true,
         child: ListView.builder(
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
           controller: _scrollController,
           key: PageStorageKey(
             'feed_${_currentUser.id}_${sessionKey}_$keySuffix',

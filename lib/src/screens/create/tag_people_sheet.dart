@@ -47,10 +47,13 @@ class _TagPeopleSheetState extends State<TagPeopleSheet> {
     }
 
     try {
-      final results = await ApiService.instance.searchUsers(query);
+      final results = await ApiService.instance.search(query);
       if (mounted && _query == query) {
         setState(() {
-          _searchResults = results;
+          _searchResults = results
+              .where((e) => e is Map<String, dynamic> && e['type'] == 'account')
+              .map((e) => AppUser.fromJson(e as Map<String, dynamic>))
+              .toList();
           _searching = false;
         });
       }

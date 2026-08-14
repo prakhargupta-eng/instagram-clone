@@ -26,7 +26,7 @@ class DetailsScreen extends StatefulWidget {
 }
 
 class _DetailsScreenState extends State<DetailsScreen> with RouteAware {
-  late final List<Post> _postList;
+  late List<Post> _postList;
   late final ScrollController _scrollController;
   final Map<String, GlobalKey> _cardKeys = {};
   int _currentIndex = 0;
@@ -43,23 +43,21 @@ class _DetailsScreenState extends State<DetailsScreen> with RouteAware {
   void initState() {
     super.initState();
     _postList = List<Post>.from(widget.posts ?? [widget.post]);
-    _currentIndex = _postList.indexWhere((p) => p.id == widget.post.id);
-    if (_currentIndex == -1) _currentIndex = 0;
+    final startIndex = _postList.indexWhere((p) => p.id == widget.post.id);
+    if (startIndex != -1) {
+      _postList = _postList.sublist(startIndex);
+    }
+    _currentIndex = 0;
 
-    final initialOffset = _currentIndex > 0 ? _currentIndex * 520.0 : 0.0;
-    _scrollController = ScrollController(initialScrollOffset: initialOffset);
+    _scrollController = ScrollController();
     _scrollController.addListener(_onScroll);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
+      if (!mounted || !context.mounted) return;
       final targetKey = _getKeyForPost(widget.post.id);
       final ctx = targetKey.currentContext;
-      if (ctx != null) {
-        Scrollable.ensureVisible(
-          ctx,
-          alignment: 0.0,
-          duration: Duration.zero,
-        );
+      if (ctx != null && ctx.mounted) {
+        Scrollable.ensureVisible(ctx, alignment: 0.0, duration: Duration.zero);
       }
       _onScroll();
     });
@@ -102,7 +100,7 @@ class _DetailsScreenState extends State<DetailsScreen> with RouteAware {
   }
 
   void _onScroll() {
-    if (!mounted) return;
+    if (!mounted || !context.mounted) return;
     final screenCenterY = MediaQuery.of(context).size.height / 2;
 
     String? closestPostId;
@@ -206,7 +204,10 @@ class _DetailsScreenState extends State<DetailsScreen> with RouteAware {
   @override
   Widget build(BuildContext context) {
     final authService = AppScope.of(context).authService;
-    final currentUser = authService.currentUser!;
+    final currentUser = authService.currentUser;
+    if (currentUser == null) {
+      return Scaffold(backgroundColor: context.surfaceColor);
+    }
 
     return Scaffold(
       backgroundColor: context.surfaceColor,
@@ -244,15 +245,34 @@ class _DetailsScreenState extends State<DetailsScreen> with RouteAware {
                       isMuted: _isMuted,
                       isActive: _currentIndex == index && _isRouteActive,
                       onMuteToggle: _toggleMute,
-                      onLike: () => widget.feedService.toggleLike(
-                        post.id,
-                        currentUser.id,
-                      ),
+                      onLike: () {
+                        widget.feedService.toggleLike(
+                          post.id,
+                          currentUser.id,
+                        );
+                        final liked = post.likedBy.contains(currentUser.id);
+                        final likedBy = List<String>.of(post.likedBy);
+                        if (liked) {
+                          likedBy.remove(currentUser.id);
+                        } else {
+                          likedBy.insert(0, currentUser.id);
+                        }
+                        setState(() {
+                          _postList[index] = post.copyWith(likedBy: likedBy);
+                        });
+                      },
                       onComment: () => showCommentsSheet(
                         context,
                         feedService: widget.feedService,
                         post: post,
                         currentUser: currentUser,
+                        onCommentAdded: (newComment) {
+                          final comments = List<Comment>.of(post.comments);
+                          comments.add(newComment);
+                          setState(() {
+                            _postList[index] = post.copyWith(comments: comments);
+                          });
+                        },
                       ),
                       isBookmarked: widget.feedService.isBookmarked(post.id),
                       onBookmark: () =>

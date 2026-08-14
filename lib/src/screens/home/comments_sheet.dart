@@ -18,12 +18,14 @@ class CommentsSheet extends StatefulWidget {
     required this.post,
     required this.currentUser,
     this.isDark,
+    this.onCommentAdded,
   });
 
   final FeedService feedService;
   final Post post;
   final AppUser currentUser;
   final bool? isDark;
+  final void Function(Comment)? onCommentAdded;
 
   @override
   State<CommentsSheet> createState() => _CommentsSheetState();
@@ -32,10 +34,12 @@ class CommentsSheet extends StatefulWidget {
 class _CommentsSheetState extends State<CommentsSheet> {
   late final TextEditingController _controller = TextEditingController();
   bool _hasText = false;
+  late Post _localPost;
 
   @override
   void initState() {
     super.initState();
+    _localPost = widget.post;
     _controller.addListener(_handleTextChange);
   }
 
@@ -100,7 +104,7 @@ class _CommentsSheetState extends State<CommentsSheet> {
               listenable: widget.feedService,
               builder: (context, _) {
                 final post =
-                    widget.feedService.getPost(widget.post.id) ?? widget.post;
+                    widget.feedService.getPost(widget.post.id) ?? _localPost;
                 final isLoading = widget.feedService.isLoading;
                 if (isLoading && post.comments.isEmpty) {
                   return const Skeletonizer(
@@ -256,6 +260,23 @@ class _CommentsSheetState extends State<CommentsSheet> {
   void _submit(String text) {
     if (text.trim().isEmpty) return;
     widget.feedService.addComment(widget.post.id, widget.currentUser, text);
+    
+    final newComment = Comment(
+      id: 'c${DateTime.now().millisecondsSinceEpoch}',
+      author: widget.currentUser,
+      text: text.trim(),
+      createdAt: DateTime.now(),
+    );
+    
+    final comments = List<Comment>.of(_localPost.comments);
+    comments.add(newComment);
+    
+    setState(() {
+      _localPost = _localPost.copyWith(comments: comments);
+    });
+    
+    widget.onCommentAdded?.call(newComment);
+    
     _controller.clear();
     FocusScope.of(context).unfocus();
   }
@@ -338,6 +359,7 @@ Future<void> showCommentsSheet(
   required Post post,
   required AppUser currentUser,
   bool? isDark,
+  void Function(Comment)? onCommentAdded,
 }) {
   final effectiveIsDark = isDark ?? AppScope.of(context).themeService.isDarkMode;
   return showModalBottomSheet(
@@ -352,6 +374,7 @@ Future<void> showCommentsSheet(
       post: post,
       currentUser: currentUser,
       isDark: effectiveIsDark,
+      onCommentAdded: onCommentAdded,
     ),
   );
 }

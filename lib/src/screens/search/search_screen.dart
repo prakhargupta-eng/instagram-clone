@@ -11,7 +11,10 @@ import '../../models/post.dart';
 import '../../models/user.dart';
 import '../../services/auth_service.dart';
 import '../../services/feed_service.dart';
+
+import 'search_view_model.dart';
 import '../profile/profile_screen.dart';
+import '../profile/details_screen.dart';
 import '../reels/reels_screen.dart';
 import '../../widgets/media_image.dart';
 import '../../widgets/ui_skeletons.dart';
@@ -19,6 +22,7 @@ import '../../widgets/ui_skeletons.dart';
 // ── Category chip data ────────────────────────────────────────────────────────
 
 const _kCategories = <(IconData?, String)>[
+  (null, 'All'),
   (null, 'IGTV'),
   (null, 'Shop'),
   (null, 'Style'),
@@ -41,114 +45,66 @@ class SearchScreen extends StatefulWidget {
 
 class _SearchScreenState extends State<SearchScreen>
     with TickerProviderStateMixin {
-  final TextEditingController _searchController = TextEditingController();
-  final FocusNode _focusNode = FocusNode();
-  String _query = '';
-  bool _focused = false;
+  late final SearchViewModel _viewModel;
   late final TabController _tabController;
-
-  final List<String> _recentSearches = [
-    '#travel',
-    'sarah_j',
-    'New York, NY',
-    '#photography',
-  ];
 
   @override
   void initState() {
     super.initState();
+    _viewModel = SearchViewModel(feedService: widget.feedService);
     _tabController = TabController(length: 4, vsync: this);
-    _focusNode.addListener(() {
-      setState(() => _focused = _focusNode.hasFocus);
-    });
   }
 
   @override
   void dispose() {
-    _searchController.dispose();
-    _focusNode.dispose();
+    _viewModel.dispose();
     _tabController.dispose();
     super.dispose();
   }
 
-  void _clearSearch() {
-    _searchController.clear();
-    _focusNode.unfocus();
-    setState(() {
-      _query = '';
-      _focused = false;
-    });
-    _tabController.index = 0;
-  }
-
-  void _addRecentSearch(String item) {
-    final trimmed = item.trim();
-    if (trimmed.isEmpty) return;
-    setState(() {
-      _recentSearches.remove(trimmed);
-      _recentSearches.insert(0, trimmed);
-    });
-  }
-
-  void _selectQuery(String item) {
-    _searchController.text = item;
-    _searchController.selection = TextSelection.fromPosition(
-      TextPosition(offset: item.length),
-    );
-    setState(() {
-      _query = item.trim();
-      _addRecentSearch(item);
-    });
-
-    final queryStr = item.trim();
-    if (queryStr.startsWith('#')) {
-      _tabController.animateTo(2); // Tags
-    } else if (_allLocations.contains(queryStr)) {
-      _tabController.animateTo(3); // Places
-    } else if (_allUsers.any((u) => u.username == queryStr)) {
-      _tabController.animateTo(1); // Accounts
-    } else {
-      _tabController.animateTo(0); // Top
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    final showTabs = _query.isNotEmpty || _focused;
+    return AnimatedBuilder(
+      animation: Listenable.merge([widget.feedService, _viewModel]),
+      builder: (context, _) {
+        final query = _viewModel.query;
+        final focused = _viewModel.isFocused;
+        final showTabs = query.isNotEmpty || focused;
 
-    return Scaffold(
-      backgroundColor: context.backgroundColor,
-      body: SafeArea(
-        child: Column(
-          children: [
-            // ── Search bar row ────────────────────────────────────────
-            _buildSearchBar(),
+        return Scaffold(
+          backgroundColor: context.backgroundColor,
+          body: SafeArea(
+            child: Column(
+              children: [
+                // ── Search bar row ────────────────────────────────────────
+                _buildSearchBar(),
 
-            // ── Tab Bar (only when searching or focused) ──────────────
-            if (showTabs) _buildTabBar(),
+                // ── Tab Bar (only when searching or focused) ──────────────
+                if (showTabs) _buildTabBar(),
 
-            // ── Category chips (only when not searching) ──────────────
-            if (!showTabs) _buildCategoryChips(),
+                // ── Category chips (only when not searching) ──────────────
+                if (!showTabs) _buildCategoryChips(),
 
-            // ── Body ──────────────────────────────────────────────────
-            Expanded(
-              child: AnimatedBuilder(
-                animation: widget.feedService,
-                builder: (context, _) {
-                  final isLoading = widget.feedService.isLoading;
-                  return Skeletonizer(
-                    enabled: isLoading,
-                    enableSwitchAnimation: true,
-                    child: showTabs
-                        ? _buildTabbedResults()
-                        : _buildExploreGrid(),
-                  );
-                },
-              ),
+                // ── Body ──────────────────────────────────────────────────
+                Expanded(
+                  child: Builder(
+                    builder: (context) {
+                      final isLoading = widget.feedService.isLoading;
+                      return Skeletonizer(
+                        enabled: isLoading,
+                        enableSwitchAnimation: true,
+                        child: showTabs
+                            ? _buildTabbedResults()
+                            : _buildExploreGrid(),
+                      );
+                    },
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 
@@ -165,16 +121,16 @@ class _SearchScreenState extends State<SearchScreen>
             child: SizedBox(
               height: 36,
               child: TextField(
-                controller: _searchController,
-                focusNode: _focusNode,
+                controller: _viewModel.searchController,
+                focusNode: _viewModel.focusNode,
                 onChanged: (v) {
-                  final trimmed = v.trim();
-                  setState(() => _query = trimmed);
-                  if (trimmed.startsWith('#') && _tabController.index != 2) {
-                    _tabController.animateTo(2);
-                  }
+                  _viewModel.onQueryChanged(v, (idx) {
+                    if (_tabController.index != idx) {
+                      _tabController.animateTo(idx);
+                    }
+                  });
                 },
-                onSubmitted: (v) => _addRecentSearch(v),
+                onSubmitted: (v) => _viewModel.addRecentSearch(v),
                 textAlignVertical: TextAlignVertical.center,
                 style: TextStyle(fontSize: 15, color: context.textPrimaryColor),
                 decoration: InputDecoration(
@@ -192,9 +148,11 @@ class _SearchScreenState extends State<SearchScreen>
                     ),
                   ),
                   prefixIconConstraints: const BoxConstraints(),
-                  suffixIcon: _query.isNotEmpty
+                  suffixIcon: _viewModel.query.isNotEmpty
                       ? GestureDetector(
-                          onTap: _clearSearch,
+                          onTap: () => _viewModel.clearSearch(
+                            (idx) => _tabController.animateTo(idx),
+                          ),
                           child: Padding(
                             padding: const EdgeInsets.only(right: 8),
                             child: Icon(
@@ -228,7 +186,7 @@ class _SearchScreenState extends State<SearchScreen>
             ),
           ),
           // Camera / QR icon (right side) — only when not focused
-          if (!_focused) ...[
+          if (!_viewModel.isFocused) ...[
             const SizedBox(width: 10),
             GestureDetector(
               onTap: () {},
@@ -241,7 +199,9 @@ class _SearchScreenState extends State<SearchScreen>
           ] else ...[
             const SizedBox(width: 10),
             GestureDetector(
-              onTap: _clearSearch,
+              onTap: () => _viewModel.clearSearch(
+                (idx) => _tabController.animateTo(idx),
+              ),
               child: Text(
                 'Cancel',
                 style: TextStyle(
@@ -297,96 +257,51 @@ class _SearchScreenState extends State<SearchScreen>
         itemCount: _kCategories.length,
         itemBuilder: (context, i) {
           final (icon, label) = _kCategories[i];
-          return Container(
-            margin: const EdgeInsets.only(right: 6),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
-            decoration: BoxDecoration(
-              color: isDarkTheme
-                  ? const Color(0xFF262626)
-                  : const Color(0xFFEFEFEF),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            alignment: Alignment.center,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (icon != null) ...[
-                  Icon(icon, size: 14, color: context.textPrimaryColor),
-                  const SizedBox(width: 4),
-                ],
-                Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500,
-                    color: context.textPrimaryColor,
+          final isSelected = _viewModel.selectedCategory == label;
+          return GestureDetector(
+            onTap: () => _viewModel.selectCategory(label),
+            child: Container(
+              margin: const EdgeInsets.only(right: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
+              decoration: BoxDecoration(
+                color: isSelected
+                    ? context.textPrimaryColor
+                    : isDarkTheme
+                    ? const Color(0xFF262626)
+                    : const Color(0xFFEFEFEF),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              alignment: Alignment.center,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (icon != null) ...[
+                    Icon(
+                      icon,
+                      size: 14,
+                      color: isSelected
+                          ? context.backgroundColor
+                          : context.textPrimaryColor,
+                    ),
+                    const SizedBox(width: 4),
+                  ],
+                  Text(
+                    label,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                      color: isSelected
+                          ? context.backgroundColor
+                          : context.textPrimaryColor,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           );
         },
       ),
     );
-  }
-
-  // ── Data Extractor Helpers ────────────────────────────────────────────────
-
-  List<AppUser> get _allUsers {
-    final seen = <String>{};
-    final users = <AppUser>[];
-    for (final post in widget.feedService.posts) {
-      if (seen.add(post.author.id)) users.add(post.author);
-    }
-    return users;
-  }
-
-  List<String> get _allTags {
-    final tagsSet = <String>{};
-    for (final post in widget.feedService.posts) {
-      final caption = post.caption;
-      final RegExp regExp = RegExp(r'#\w+');
-      final matches = regExp.allMatches(caption);
-      for (final match in matches) {
-        tagsSet.add(match.group(0)!);
-      }
-    }
-    return tagsSet.toList();
-  }
-
-  List<String> get _allLocations {
-    final locationsSet = <String>{};
-    for (final post in widget.feedService.posts) {
-      if (post.location != null && post.location!.isNotEmpty) {
-        locationsSet.add(post.location!);
-      }
-    }
-    return locationsSet.toList();
-  }
-
-  Iterable<AppUser> get _filteredUsers {
-    final q = _query.toLowerCase();
-    if (q.isEmpty) return _allUsers;
-    return _allUsers.where(
-      (u) =>
-          u.username.toLowerCase().contains(q) ||
-          u.fullName.toLowerCase().contains(q),
-    );
-  }
-
-  Iterable<String> get _filteredTags {
-    final q = _query.toLowerCase();
-    final all = _allTags;
-    if (q.isEmpty) return all;
-    final search = q.startsWith('#') ? q : '#$q';
-    return all.where((t) => t.toLowerCase().contains(search.toLowerCase()));
-  }
-
-  Iterable<String> get _filteredLocations {
-    final q = _query.toLowerCase();
-    final all = _allLocations;
-    if (q.isEmpty) return all;
-    return all.where((l) => l.toLowerCase().contains(q));
   }
 
   // ── Tab Views ─────────────────────────────────────────────────────────────
@@ -404,13 +319,13 @@ class _SearchScreenState extends State<SearchScreen>
   }
 
   Widget _buildTopTab() {
-    if (_query.isEmpty) {
+    if (_viewModel.query.isEmpty) {
       return _buildRecentSearchesSection();
     }
 
-    final matchedUsers = _filteredUsers.take(3).toList();
-    final matchedTags = _filteredTags.take(3).toList();
-    final matchedLocs = _filteredLocations.take(3).toList();
+    final matchedUsers = _viewModel.filteredUsers.take(3).toList();
+    final matchedTags = _viewModel.filteredTags.take(3).toList();
+    final matchedLocs = _viewModel.filteredLocations.take(3).toList();
 
     if (matchedUsers.isEmpty && matchedTags.isEmpty && matchedLocs.isEmpty) {
       return _buildNoResultsPlaceholder();
@@ -468,46 +383,11 @@ class _SearchScreenState extends State<SearchScreen>
     );
   }
 
-  List<AppUser> get _suggestedUsers {
-    final list = List<AppUser>.from(_allUsers);
-    list.sort((a, b) => b.followers.compareTo(a.followers));
-    return list.take(3).toList();
-  }
-
-  List<String> get _suggestedTags {
-    final frequency = <String, int>{};
-    for (final post in widget.feedService.posts) {
-      final caption = post.caption;
-      final RegExp regExp = RegExp(r'#\w+');
-      final matches = regExp.allMatches(caption);
-      for (final match in matches) {
-        final tag = match.group(0)!;
-        frequency[tag] = (frequency[tag] ?? 0) + 1;
-      }
-    }
-    final sortedTags = frequency.keys.toList()
-      ..sort((a, b) => frequency[b]!.compareTo(frequency[a]!));
-    return sortedTags.take(3).toList();
-  }
-
-  List<String> get _suggestedLocations {
-    final frequency = <String, int>{};
-    for (final post in widget.feedService.posts) {
-      if (post.location != null && post.location!.isNotEmpty) {
-        final loc = post.location!;
-        frequency[loc] = (frequency[loc] ?? 0) + 1;
-      }
-    }
-    final sortedLocs = frequency.keys.toList()
-      ..sort((a, b) => frequency[b]!.compareTo(frequency[a]!));
-    return sortedLocs.take(3).toList();
-  }
-
   Widget _buildRecentSearchesSection() {
-    final hasRecent = _recentSearches.isNotEmpty;
-    final sugUsers = _suggestedUsers;
-    final sugTags = _suggestedTags;
-    final sugLocs = _suggestedLocations;
+    final hasRecent = _viewModel.recentSearches.isNotEmpty;
+    final sugUsers = _viewModel.suggestedUsers;
+    final sugTags = _viewModel.suggestedTags;
+    final sugLocs = _viewModel.suggestedLocations;
 
     return ListView(
       padding: const EdgeInsets.symmetric(vertical: 8),
@@ -528,9 +408,7 @@ class _SearchScreenState extends State<SearchScreen>
                 ),
                 GestureDetector(
                   onTap: () {
-                    setState(() {
-                      _recentSearches.clear();
-                    });
+                    _viewModel.clearRecentSearches();
                   },
                   child: const Text(
                     'Clear All',
@@ -544,9 +422,9 @@ class _SearchScreenState extends State<SearchScreen>
               ],
             ),
           ),
-          ..._recentSearches.map((item) {
+          ..._viewModel.recentSearches.map((item) {
             final isTag = item.startsWith('#');
-            final isLoc = !isTag && _allLocations.contains(item);
+            final isLoc = !isTag && _viewModel.allLocations.contains(item);
             final isUser = !isTag && !isLoc;
 
             IconData icon = Icons.history;
@@ -588,12 +466,13 @@ class _SearchScreenState extends State<SearchScreen>
                   color: AppColors.textSecondary,
                 ),
                 onPressed: () {
-                  setState(() {
-                    _recentSearches.remove(item);
-                  });
+                  _viewModel.removeRecentSearch(item);
                 },
               ),
-              onTap: () => _selectQuery(item),
+              onTap: () => _viewModel.selectQuery(
+                item,
+                (idx) => _tabController.animateTo(idx),
+              ),
             );
           }),
           const Divider(height: 24, thickness: 0.5, indent: 16, endIndent: 16),
@@ -658,7 +537,10 @@ class _SearchScreenState extends State<SearchScreen>
         size: 16,
         color: AppColors.textSecondary,
       ),
-      onTap: () => _selectQuery(user.username),
+      onTap: () => _viewModel.selectQuery(
+        user.username,
+        (idx) => _tabController.animateTo(idx),
+      ),
     );
   }
 
@@ -695,7 +577,8 @@ class _SearchScreenState extends State<SearchScreen>
         size: 16,
         color: AppColors.textSecondary,
       ),
-      onTap: () => _selectQuery(tag),
+      onTap: () =>
+          _viewModel.selectQuery(tag, (idx) => _tabController.animateTo(idx)),
     );
   }
 
@@ -736,12 +619,15 @@ class _SearchScreenState extends State<SearchScreen>
         size: 16,
         color: AppColors.textSecondary,
       ),
-      onTap: () => _selectQuery(location),
+      onTap: () => _viewModel.selectQuery(
+        location,
+        (idx) => _tabController.animateTo(idx),
+      ),
     );
   }
 
   Widget _buildRecentUserAvatar(String username) {
-    final user = _allUsers.firstWhere(
+    final user = _viewModel.allUsers.firstWhere(
       (u) => u.username == username,
       orElse: () => AppUser(
         id: '',
@@ -765,7 +651,7 @@ class _SearchScreenState extends State<SearchScreen>
   }
 
   Widget _buildAccountsTab() {
-    final matches = _filteredUsers.toList();
+    final matches = _viewModel.filteredUsers.toList();
     if (matches.isEmpty) return _buildNoResultsPlaceholder();
 
     return ListView.separated(
@@ -806,7 +692,7 @@ class _SearchScreenState extends State<SearchScreen>
       ),
       onTap: () {
         print("user:-*\$#\$*#*\$ ${user.toJson()}");
-        _addRecentSearch(user.username);
+        _viewModel.addRecentSearch(user.username);
         Navigator.of(context).push(
           MaterialPageRoute(
             builder: (_) => ProfileScreen(
@@ -821,7 +707,7 @@ class _SearchScreenState extends State<SearchScreen>
   }
 
   Widget _buildTagsTab() {
-    final matches = _filteredTags.toList();
+    final matches = _viewModel.filteredTags.toList();
     if (matches.isEmpty) return _buildNoResultsPlaceholder();
 
     return ListView.builder(
@@ -862,14 +748,14 @@ class _SearchScreenState extends State<SearchScreen>
         style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
       ),
       onTap: () {
-        _addRecentSearch(tag);
-        _selectQuery(tag);
+        _viewModel.addRecentSearch(tag);
+        _viewModel.selectQuery(tag, (idx) => _tabController.animateTo(idx));
       },
     );
   }
 
   Widget _buildPlacesTab() {
-    final matches = _filteredLocations.toList();
+    final matches = _viewModel.filteredLocations.toList();
     if (matches.isEmpty) return _buildNoResultsPlaceholder();
 
     return ListView.builder(
@@ -914,8 +800,11 @@ class _SearchScreenState extends State<SearchScreen>
         style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
       ),
       onTap: () {
-        _addRecentSearch(location);
-        _selectQuery(location);
+        _viewModel.addRecentSearch(location);
+        _viewModel.selectQuery(
+          location,
+          (idx) => _tabController.animateTo(idx),
+        );
       },
     );
   }
@@ -945,8 +834,13 @@ class _SearchScreenState extends State<SearchScreen>
   // We use a CustomScrollView + SliverList of Row widgets for precise control.
 
   Widget _buildExploreGrid() {
-    final posts = widget.feedService.posts;
-    final isLoading = widget.feedService.isLoading;
+    final bool isCategory = _viewModel.selectedCategory != null;
+    final posts = isCategory
+        ? _viewModel.categoryPosts
+        : widget.feedService.posts;
+    final isLoading = isCategory
+        ? _viewModel.isCategoryLoading
+        : widget.feedService.isLoading;
     if (isLoading && posts.isEmpty) {
       return const ExploreGridSkeleton();
     }
@@ -998,22 +892,44 @@ class _SearchScreenState extends State<SearchScreen>
       }
     }
 
-    return MasonryGridView.count(
-      crossAxisCount: 3,
-      mainAxisSpacing: 2,
-      crossAxisSpacing: 2,
-      itemCount: specs.length,
-      itemBuilder: (context, index) {
-        final spec = specs[index];
-        final large = spec.single != null && bigTiles.contains(spec.postIndex);
-
-        return _ExploreTile(
-          spec: spec,
-          feedService: widget.feedService,
-          large: large,
-          gap: 2,
-        );
+    return NotificationListener<ScrollNotification>(
+      onNotification: (ScrollNotification scrollInfo) {
+        if (!_viewModel.isCategoryLoadingMore &&
+            scrollInfo.metrics.pixels >=
+                scrollInfo.metrics.maxScrollExtent - 500) {
+          _viewModel.loadMoreCategoryPosts();
+        }
+        return false;
       },
+      child: MasonryGridView.count(
+        crossAxisCount: 3,
+        mainAxisSpacing: 2,
+        crossAxisSpacing: 2,
+        itemCount: specs.length + (_viewModel.isCategoryLoadingMore ? 3 : 0),
+        itemBuilder: (context, index) {
+          if (index >= specs.length) {
+            return AspectRatio(
+              aspectRatio: 1,
+              child: Skeletonizer(
+                enabled: true,
+                child: Container(color: Colors.grey),
+              ),
+            );
+          }
+
+          final spec = specs[index];
+          final large =
+              spec.single != null && bigTiles.contains(spec.postIndex);
+
+          return _ExploreTile(
+            spec: spec,
+            feedService: widget.feedService,
+            large: large,
+            gap: 2,
+            allPosts: posts,
+          );
+        },
+      ),
     );
   }
 }
@@ -1041,32 +957,46 @@ class _ExploreTile extends StatelessWidget {
     required this.feedService,
     required this.large,
     required this.gap,
+    required this.allPosts,
   });
 
   final _TileSpec spec;
   final FeedService feedService;
   final bool large;
   final double gap;
+  final List<Post> allPosts;
 
   @override
   Widget build(BuildContext context) {
     final cover = spec.cover;
 
     if (cover != null) {
-      return _buildCover(cover);
+      return _buildCover(context, cover);
     }
 
     final post = spec.single!;
     return GestureDetector(
       onTap: () {
-        if (!post.isVideo) return;
-
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) =>
-                ReelsScreen(feedService: feedService, currentUser: post.author),
-          ),
-        );
+        if (post.isVideo) {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => ReelsScreen(
+                feedService: feedService,
+                currentUser: post.author,
+              ),
+            ),
+          );
+        } else {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => DetailsScreen(
+                post: post,
+                posts: allPosts,
+                feedService: feedService,
+              ),
+            ),
+          );
+        }
       },
       child: AspectRatio(
         aspectRatio: large ? 1 / 2 : 1,
@@ -1101,31 +1031,31 @@ class _ExploreTile extends StatelessWidget {
     );
   }
 
-  Widget _buildCover(List<Post> posts) {
+  Widget _buildCover(BuildContext context, List<Post> posts) {
     final count = posts.length;
     return AspectRatio(
       aspectRatio: 1,
       child: count == 1
-          ? _coverImage(posts[0])
+          ? _coverImage(context, posts[0])
           : count == 2
           ? Row(
               children: [
-                Expanded(child: _coverImage(posts[0])),
+                Expanded(child: _coverImage(context, posts[0])),
                 const SizedBox(width: 2),
-                Expanded(child: _coverImage(posts[1])),
+                Expanded(child: _coverImage(context, posts[1])),
               ],
             )
           : count == 3
           ? Row(
               children: [
-                Expanded(child: _coverImage(posts[0])),
+                Expanded(child: _coverImage(context, posts[0])),
                 const SizedBox(width: 2),
                 Expanded(
                   child: Column(
                     children: [
-                      Expanded(child: _coverImage(posts[1])),
+                      Expanded(child: _coverImage(context, posts[1])),
                       const SizedBox(height: 2),
-                      Expanded(child: _coverImage(posts[2])),
+                      Expanded(child: _coverImage(context, posts[2])),
                     ],
                   ),
                 ),
@@ -1136,9 +1066,9 @@ class _ExploreTile extends StatelessWidget {
                 Expanded(
                   child: Row(
                     children: [
-                      Expanded(child: _coverImage(posts[0])),
+                      Expanded(child: _coverImage(context, posts[0])),
                       const SizedBox(width: 2),
-                      Expanded(child: _coverImage(posts[1])),
+                      Expanded(child: _coverImage(context, posts[1])),
                     ],
                   ),
                 ),
@@ -1146,9 +1076,9 @@ class _ExploreTile extends StatelessWidget {
                 Expanded(
                   child: Row(
                     children: [
-                      Expanded(child: _coverImage(posts[2])),
+                      Expanded(child: _coverImage(context, posts[2])),
                       const SizedBox(width: 2),
-                      Expanded(child: _coverImage(posts[3])),
+                      Expanded(child: _coverImage(context, posts[3])),
                     ],
                   ),
                 ),
@@ -1157,16 +1087,40 @@ class _ExploreTile extends StatelessWidget {
     );
   }
 
-  Widget _coverImage(Post post) {
-    return MediaImage(
-      path: post.imageUrl,
-      videoUrl: post.isVideo ? post.videoUrl : null,
-      fit: BoxFit.cover,
-      errorBuilder: (_, __, ___) => Container(
-        color: AppColors.border,
-        child: const Icon(
-          Icons.image_not_supported_outlined,
-          color: AppColors.textSecondary,
+  Widget _coverImage(BuildContext context, Post post) {
+    return GestureDetector(
+      onTap: () {
+        if (post.isVideo) {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => ReelsScreen(
+                feedService: feedService,
+                currentUser: post.author,
+              ),
+            ),
+          );
+        } else {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => DetailsScreen(
+                post: post,
+                posts: allPosts,
+                feedService: feedService,
+              ),
+            ),
+          );
+        }
+      },
+      child: MediaImage(
+        path: post.imageUrl,
+        videoUrl: post.isVideo ? post.videoUrl : null,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => Container(
+          color: AppColors.border,
+          child: const Icon(
+            Icons.image_not_supported_outlined,
+            color: AppColors.textSecondary,
+          ),
         ),
       ),
     );

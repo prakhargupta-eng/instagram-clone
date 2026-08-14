@@ -40,12 +40,14 @@ class ApiEndpoints {
   static String userProfile(String userId) => '$baseUrl/users/profile/$userId';
   static String get updateProfile => '$baseUrl/users/profile';
   static String followUser(String userId) => '$baseUrl/users/$userId/follow';
-  static String searchUsers(String query) =>
-      '$baseUrl/users/search?q=${Uri.encodeComponent(query)}';
+  static String search(String query) =>
+      '$baseUrl/search?q=${Uri.encodeComponent(query)}';
 
   // 3. Post & Feed Endpoints
   static String get feed => '$baseUrl/posts/feed';
   static String get reels => '$baseUrl/posts/reels';
+  static String exploreCategory(String category, {int page = 1, int limit = 10}) =>
+      '$baseUrl/posts/explore?category=${Uri.encodeComponent(category)}&page=$page&limit=$limit';
   static String get createPost => '$baseUrl/posts';
   static String taggedPosts(String userId) => '$baseUrl/posts/tagged/$userId';
   static String likePost(String postId) => '$baseUrl/posts/$postId/like';

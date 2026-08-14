@@ -198,18 +198,19 @@ class FeedService extends ChangeNotifier {
 
   void toggleLike(String postId, String userId) async {
     final index = _posts.indexWhere((p) => p.id == postId);
-    if (index == -1) return;
-    final post = _posts[index];
-    final liked = post.likedBy.contains(userId);
-    final likedBy = List<String>.of(post.likedBy);
+    if (index != -1) {
+      final post = _posts[index];
+      final liked = post.likedBy.contains(userId);
+      final likedBy = List<String>.of(post.likedBy);
 
-    if (liked) {
-      likedBy.remove(userId);
-    } else {
-      likedBy.insert(0, userId);
+      if (liked) {
+        likedBy.remove(userId);
+      } else {
+        likedBy.insert(0, userId);
+      }
+      _posts[index] = post.copyWith(likedBy: likedBy);
+      notifyListeners();
     }
-    _posts[index] = post.copyWith(likedBy: likedBy);
-    notifyListeners();
 
     try {
       await ApiService.instance.toggleLike(postId);
@@ -220,23 +221,26 @@ class FeedService extends ChangeNotifier {
 
   void addComment(String postId, AppUser author, String text) async {
     final index = _posts.indexWhere((p) => p.id == postId);
-    if (index == -1 || text.trim().isEmpty) return;
-    final post = _posts[index];
-    final comments = List<Comment>.of(post.comments);
-    final newComment = Comment(
-      id: 'c${DateTime.now().millisecondsSinceEpoch}',
-      author: author,
-      text: text.trim(),
-      createdAt: DateTime.now(),
-    );
-    comments.add(newComment);
-    _posts[index] = post.copyWith(comments: comments);
-    notifyListeners();
+    if (index != -1 && text.trim().isNotEmpty) {
+      final post = _posts[index];
+      final comments = List<Comment>.of(post.comments);
+      final newComment = Comment(
+        id: 'c${DateTime.now().millisecondsSinceEpoch}',
+        author: author,
+        text: text.trim(),
+        createdAt: DateTime.now(),
+      );
+      comments.add(newComment);
+      _posts[index] = post.copyWith(comments: comments);
+      notifyListeners();
+    }
 
-    try {
-      await ApiService.instance.addComment(postId, text);
-    } catch (e) {
-      debugPrint('REST API addComment error: $e');
+    if (text.trim().isNotEmpty) {
+      try {
+        await ApiService.instance.addComment(postId, text);
+      } catch (e) {
+        debugPrint('REST API addComment error: $e');
+      }
     }
   }
 

@@ -38,10 +38,16 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen>
     with SingleTickerProviderStateMixin {
-  late final TabController _tabController = TabController(
-    length: 3,
-    vsync: this,
-  );
+  late final TabController _tabController;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(
+      length: 3,
+      vsync: this,
+    );
+  }
 
   FeedService get feedService => widget.feedService;
 
@@ -112,7 +118,7 @@ class _ProfileScreenState extends State<ProfileScreen>
           final posts = feedService.posts
               .where((p) => p.author.id == displayUser.id)
               .toList();
-          final isFollowing = widget.authService == null
+          final isFollowing = widget.authService?.currentUser == null
               ? false
               : feedService.isFollowing(
                   widget.authService!.currentUser!.id,
@@ -384,10 +390,12 @@ class _ProfileScreenState extends State<ProfileScreen>
 
   void _openEditProfile(BuildContext context) {
     final auth = widget.authService!;
+    final currentUser = auth.currentUser;
+    if (currentUser == null) return;
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) =>
-            EditProfileScreen(authService: auth, user: auth.currentUser!),
+            EditProfileScreen(authService: auth, user: currentUser),
       ),
     );
   }
@@ -563,9 +571,14 @@ class _ProfileScreenState extends State<ProfileScreen>
       ),
     );
     if (confirmed == true) {
-      await widget.authService?.deleteAccount();
-      if (!mounted) return;
-      ToastHelper.showToast(context, "Account deleted successfully.");
+      try {
+        await widget.authService?.deleteAccount();
+        if (!mounted) return;
+        ToastHelper.showToast(context, "Account deleted successfully.");
+      } catch (e) {
+        if (!mounted) return;
+        ToastHelper.showToast(context, "Failed to delete account. Please try again.");
+      }
     }
   }
 }

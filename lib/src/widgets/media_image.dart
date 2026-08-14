@@ -63,6 +63,13 @@ class _MediaImageState extends State<MediaImage> {
       return;
     }
 
+    if (video.startsWith('http://') || video.startsWith('https://')) {
+      // Generating thumbnails for remote videos requires downloading them into memory.
+      // Doing this for multiple posts in a grid/feed causes severe ANRs.
+      // Remote videos should supply their own thumbnail via post.imageUrl.
+      return;
+    }
+
     // Check static cache first
     if (_thumbnailCache.containsKey(video)) {
       setState(() {

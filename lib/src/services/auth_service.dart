@@ -41,6 +41,14 @@ class AuthService extends ChangeNotifier {
     try {
       await ApiService.instance.initSession();
       _currentUser = ApiService.instance.currentUser;
+      
+      ApiService.instance.addListener(() {
+        if (ApiService.instance.currentUser == null && _currentUser != null) {
+          _currentUser = null;
+          notifyListeners();
+        }
+      });
+
       if (_currentUser != null) {
         _sessionKey = DateTime.now().millisecondsSinceEpoch.toString();
       }
@@ -124,12 +132,13 @@ class AuthService extends ChangeNotifier {
     if (id == null) return;
     try {
       await ApiService.instance.deleteAccount();
+      _registeredUsers.removeWhere((u) => u.id == id);
+      _currentUser = null;
+      notifyListeners();
     } catch (e) {
       debugPrint('REST API deleteAccount error: $e');
+      rethrow;
     }
-    _registeredUsers.removeWhere((u) => u.id == id);
-    _currentUser = null;
-    notifyListeners();
   }
 
   Future<AuthResult> changePassword({

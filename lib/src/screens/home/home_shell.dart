@@ -29,11 +29,17 @@ class _HomeShellState extends State<HomeShell> {
   @override
   void initState() {
     super.initState();
-    _feedService.ensureLocalPostsLoaded(_currentUser);
+    final user = widget.authService.currentUser;
+    if (user != null) {
+      _feedService.ensureLocalPostsLoaded(user);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    if (widget.authService.currentUser == null) {
+      return Scaffold(backgroundColor: context.surfaceColor);
+    }
     // _selectedIndex: 0=home, 1=search, 3=reels, 4=profile
     // screens list:  [0=Home, 1=Search, 2=Reels, 3=Profile]
     final screenIndex = switch (_selectedIndex) {
@@ -142,6 +148,7 @@ class _HomeShellState extends State<HomeShell> {
       return;
     }
     // Store raw nav index: 0=home, 1=search, 3=reels, 4=profile
+    FocusManager.instance.primaryFocus?.unfocus();
     setState(() => _selectedIndex = index);
   }
 }

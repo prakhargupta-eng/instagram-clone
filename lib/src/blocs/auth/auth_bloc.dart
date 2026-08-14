@@ -12,6 +12,22 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     on<SignupRequested>(_onSignupRequested);
     on<LogoutRequested>(_onLogoutRequested);
     on<AuthStatusChanged>((event, emit) => emit(event.newState));
+
+    authService.addListener(_onAuthServiceChanged);
+  }
+
+  void _onAuthServiceChanged() {
+    if (!authService.isLoggedIn && state is AuthAuthenticated) {
+      add(const AuthStatusChanged(AuthUnauthenticated()));
+    } else if (authService.isLoggedIn && state is! AuthAuthenticated) {
+      add(AuthStatusChanged(AuthAuthenticated(authService.currentUser!)));
+    }
+  }
+
+  @override
+  Future<void> close() {
+    authService.removeListener(_onAuthServiceChanged);
+    return super.close();
   }
 
   Future<void> _onInitRequested(
