@@ -29,11 +29,11 @@ class Comment {
   }
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'author': author.toJson(),
-        'text': text,
-        'createdAt': createdAt.toIso8601String(),
-      };
+    'id': id,
+    'author': author.toJson(),
+    'text': text,
+    'createdAt': createdAt.toIso8601String(),
+  };
 }
 
 class Post {
@@ -54,6 +54,7 @@ class Post {
   final double brightness;
   final double contrast;
   final double saturation;
+  final bool isBookmarked;
 
   const Post({
     required this.id,
@@ -73,6 +74,7 @@ class Post {
     this.brightness = 0.0,
     this.contrast = 1.0,
     this.saturation = 1.0,
+    this.isBookmarked = false,
   });
 
   int get likes => likedBy.length;
@@ -81,7 +83,8 @@ class Post {
 
   factory Post.fromJson(Map<String, dynamic> json, {AppUser? author}) {
     final authorJson = json['author'] ?? json['user'];
-    final parsedAuthor = author ??
+    final parsedAuthor =
+        author ??
         ((authorJson is Map<String, dynamic>)
             ? AppUser.fromJson(authorJson)
             : AppUser(
@@ -143,28 +146,30 @@ class Post {
       brightness: (json['brightness'] as num?)?.toDouble() ?? 0.0,
       contrast: (json['contrast'] as num?)?.toDouble() ?? 1.0,
       saturation: (json['saturation'] as num?)?.toDouble() ?? 1.0,
+      isBookmarked: json['isBookmarked'] ?? false,
     );
   }
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'author': author.toJson(),
-        'imageUrl': imageUrl,
-        'videoUrl': videoUrl,
-        'caption': caption,
-        'location': location,
-        'music': music,
-        'musicPreviewUrl': musicPreviewUrl,
-        'taggedUsers': taggedUsers.map((u) => u.toJson()).toList(),
-        'createdAt': createdAt.toIso8601String(),
-        'likedBy': likedBy,
-        'comments': comments.map((c) => c.toJson()).toList(),
-        'isVideo': isVideo,
-        'filterIndex': filterIndex,
-        'brightness': brightness,
-        'contrast': contrast,
-        'saturation': saturation,
-      };
+    'id': id,
+    'author': author.toJson(),
+    'imageUrl': imageUrl,
+    'videoUrl': videoUrl,
+    'caption': caption,
+    'location': location,
+    'music': music,
+    'musicPreviewUrl': musicPreviewUrl,
+    'taggedUsers': taggedUsers.map((u) => u.toJson()).toList(),
+    'createdAt': createdAt.toIso8601String(),
+    'likedBy': likedBy,
+    'comments': comments.map((c) => c.toJson()).toList(),
+    'isVideo': isVideo,
+    'filterIndex': filterIndex,
+    'brightness': brightness,
+    'contrast': contrast,
+    'saturation': saturation,
+    'isBookmarked': isBookmarked,
+  };
 
   Post copyWith({
     String? imageUrl,
@@ -181,6 +186,7 @@ class Post {
     double? brightness,
     double? contrast,
     double? saturation,
+    bool? isBookmarked,
   }) {
     return Post(
       id: id,
@@ -200,6 +206,7 @@ class Post {
       brightness: brightness ?? this.brightness,
       contrast: contrast ?? this.contrast,
       saturation: saturation ?? this.saturation,
+      isBookmarked: isBookmarked ?? this.isBookmarked,
     );
   }
 }

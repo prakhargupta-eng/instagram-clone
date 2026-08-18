@@ -7,6 +7,7 @@ class AppUser {
   final String avatarUrl;
   final int following;
   final int followers;
+  final int postsCount;
   final bool isPrivate;
   final String website;
   final String gender;
@@ -20,6 +21,7 @@ class AppUser {
     required this.avatarUrl,
     this.following = 0,
     this.followers = 0,
+    this.postsCount = 0,
     this.isPrivate = false,
     this.website = '',
     this.gender = '',
@@ -27,15 +29,18 @@ class AppUser {
 
   factory AppUser.fromJson(Map<String, dynamic> json) {
     final uMap = (json['user'] is Map<String, dynamic>) ? json['user'] as Map<String, dynamic> : json;
+    final countMap = uMap['_count'] is Map ? uMap['_count'] : (json['_count'] is Map ? json['_count'] : null);
+    
     return AppUser(
-      id: (uMap['id'] ?? uMap['userId'] ?? json['id'] ?? '').toString(),
+      id: (uMap['id'] ?? uMap['_id'] ?? uMap['userId'] ?? json['id'] ?? json['_id'] ?? '').toString(),
       username: (uMap['username'] ?? json['username'] ?? 'user').toString(),
       fullName: (uMap['fullName'] ?? uMap['name'] ?? json['fullName'] ?? uMap['username'] ?? json['username'] ?? 'User').toString(),
       email: (uMap['email'] ?? json['email'] ?? '').toString(),
       bio: (uMap['bio'] ?? json['bio'] ?? '').toString(),
       avatarUrl: (uMap['avatarUrl'] ?? json['avatarUrl'] ?? '').toString(),
-      following: uMap['following'] ?? json['following'] ?? 0,
-      followers: uMap['followers'] ?? json['followers'] ?? 0,
+      following: countMap?['following'] ?? uMap['following'] ?? json['following'] ?? 0,
+      followers: countMap?['followers'] ?? uMap['followers'] ?? json['followers'] ?? 0,
+      postsCount: countMap?['posts'] ?? uMap['postsCount'] ?? json['postsCount'] ?? 0,
       isPrivate: uMap['isPrivate'] ?? json['isPrivate'] ?? false,
       website: (uMap['website'] ?? json['website'] ?? '').toString(),
       gender: (uMap['gender'] ?? json['gender'] ?? '').toString(),
@@ -51,6 +56,7 @@ class AppUser {
         'avatarUrl': avatarUrl,
         'following': following,
         'followers': followers,
+        'postsCount': postsCount,
         'isPrivate': isPrivate,
         'website': website,
         'gender': gender,
@@ -63,6 +69,7 @@ class AppUser {
     String? avatarUrl,
     int? following,
     int? followers,
+    int? postsCount,
     bool? isPrivate,
     String? website,
     String? gender,
@@ -76,6 +83,7 @@ class AppUser {
       avatarUrl: avatarUrl ?? this.avatarUrl,
       following: following ?? this.following,
       followers: followers ?? this.followers,
+      postsCount: postsCount ?? this.postsCount,
       isPrivate: isPrivate ?? this.isPrivate,
       website: website ?? this.website,
       gender: gender ?? this.gender,

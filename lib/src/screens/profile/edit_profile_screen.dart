@@ -34,12 +34,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   late bool _isPrivate;
   bool _saving = false;
 
-  final ImagePicker _imagePicker = ImagePicker();
   final _formKey = GlobalKey<FormState>();
 
   Future<void> _pickAvatarFromGallery() async {
     try {
-      final picked = await _imagePicker.pickImage(
+      final ImagePicker imagePicker = ImagePicker();
+      final picked = await imagePicker.pickImage(
         source: ImageSource.gallery,
         maxWidth: 512,
         imageQuality: 85,
@@ -61,6 +61,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   @override
   void initState() {
     super.initState();
+    print("🔥 EditProfileScreen initState - User: ${widget.user}");
     _usernameController = TextEditingController(text: widget.user.username);
     _fullNameController = TextEditingController(text: widget.user.fullName);
     _bioController = TextEditingController(text: widget.user.bio);
@@ -97,8 +98,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         isPrivate: _isPrivate,
       ),
     );
-    Navigator.of(context).pop();
     ToastHelper.showToast(context, 'Profile updated successfully.');
+    Navigator.of(context).pop();
   }
 
   void _showGenderPicker() {

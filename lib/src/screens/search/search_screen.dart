@@ -18,7 +18,7 @@ import '../profile/details_screen.dart';
 import '../reels/reels_screen.dart';
 import '../../widgets/media_image.dart';
 import '../../widgets/ui_skeletons.dart';
-
+import '../../widgets/avatar.dart';
 // ── Category chip data ────────────────────────────────────────────────────────
 
 const _kCategories = <(IconData?, String)>[
@@ -510,16 +510,7 @@ class _SearchScreenState extends State<SearchScreen>
   Widget _buildSuggestedUserTile(AppUser user) {
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
-      leading: CircleAvatar(
-        radius: 18,
-        backgroundColor: AppColors.border,
-        backgroundImage: user.avatarUrl.isNotEmpty
-            ? NetworkImage(user.avatarUrl)
-            : null,
-        child: user.avatarUrl.isEmpty
-            ? const Icon(Icons.person, color: AppColors.textSecondary, size: 18)
-            : null,
-      ),
+      leading: Avatar(url: user.avatarUrl, radius: 18),
       title: Text(
         user.username,
         style: const TextStyle(
@@ -638,16 +629,7 @@ class _SearchScreenState extends State<SearchScreen>
         bio: '',
       ),
     );
-    return CircleAvatar(
-      radius: 18,
-      backgroundColor: AppColors.border,
-      backgroundImage: user.avatarUrl.isNotEmpty
-          ? NetworkImage(user.avatarUrl)
-          : null,
-      child: user.avatarUrl.isEmpty
-          ? const Icon(Icons.person, color: AppColors.textSecondary, size: 18)
-          : null,
-    );
+    return Avatar(url: user.avatarUrl, radius: 18);
   }
 
   Widget _buildAccountsTab() {
@@ -668,16 +650,7 @@ class _SearchScreenState extends State<SearchScreen>
   Widget _buildUserListTile(AppUser user) {
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      leading: CircleAvatar(
-        radius: 20,
-        backgroundColor: AppColors.border,
-        backgroundImage: user.avatarUrl.isNotEmpty
-            ? NetworkImage(user.avatarUrl)
-            : null,
-        child: user.avatarUrl.isEmpty
-            ? const Icon(Icons.person, color: AppColors.textSecondary)
-            : null,
-      ),
+      leading: Avatar(url: user.avatarUrl, radius: 20),
       title: Text(
         user.username,
         style: const TextStyle(

@@ -117,7 +117,13 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
     super.dispose();
   }
 
+  DateTime _lastScrollTime = DateTime.now();
+
   void _onScroll() {
+    final now = DateTime.now();
+    if (now.difference(_lastScrollTime).inMilliseconds < 100) return;
+    _lastScrollTime = now;
+
     if (!mounted || !context.mounted || _currentFeedList.isEmpty) return;
     final screenCenterY = MediaQuery.of(context).size.height / 2;
 
@@ -288,7 +294,11 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
                   )
                   .toList();
             }
-            return _buildFeed(publicPosts, 'public', showSuggestions: true);
+            return _buildFeed(
+              publicPosts,
+              'public',
+              showSuggestions: _currentUser.following < 0,
+            );
           }
         },
       ),
@@ -337,7 +347,9 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
                 children: [
                   StoryBar(
                     stories: widget.feedService.stories,
-                    currentUser: _currentUser,
+                    currentUser:
+                        widget.feedService.userById(_currentUser.id) ??
+                        _currentUser,
                     feedService: widget.feedService,
                     onAddStory: _openCreateStory,
                   ),

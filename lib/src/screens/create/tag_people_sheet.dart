@@ -147,9 +147,7 @@ class _TagPeopleSheetState extends State<TagPeopleSheet> {
                     itemBuilder: (context, index) {
                       final user = _selectedUsers[index];
                       return Chip(
-                        avatar: CircleAvatar(
-                          backgroundImage: NetworkImage(user.avatarUrl),
-                        ),
+                        avatar: Avatar(url: user.avatarUrl, radius: 14),
                         label: Text('@${user.username}'),
                         deleteIcon: const Icon(Icons.close, size: 16),
                         onDeleted: () {

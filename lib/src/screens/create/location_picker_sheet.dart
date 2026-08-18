@@ -12,7 +12,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
   final _controller = TextEditingController();
   String _text = '';
 
-  static const _suggestions = <String>[
+  final List<String> _suggestions = <String>[
     'Mumbai, India',
     'Delhi, India',
     'Bengaluru, India',

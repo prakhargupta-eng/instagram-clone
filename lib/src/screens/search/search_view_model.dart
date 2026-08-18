@@ -146,6 +146,7 @@ class SearchViewModel extends ChangeNotifier {
           page: 1,
           limit: 20,
         );
+        feedService.syncBookmarksFromPosts(_categoryPosts);
         _categoryHasMore = _categoryPosts.length >= 20;
         _categoryPage = 3; // Since we fetched 20 items (2 pages of 10)
       } catch (e) {
@@ -178,6 +179,7 @@ class SearchViewModel extends ChangeNotifier {
         _categoryHasMore = false;
       } else {
         _categoryPosts.addAll(morePosts);
+        feedService.syncBookmarksFromPosts(morePosts);
         _categoryHasMore = morePosts.length >= 10;
         _categoryPage++;
       }

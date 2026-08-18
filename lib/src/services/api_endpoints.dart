@@ -37,15 +37,16 @@ class ApiEndpoints {
   static String get deleteAccount => '$baseUrl/auth/delete';
 
   // 2. User & Profile Endpoints
-  static String userProfile(String userId) => '$baseUrl/users/profile/$userId';
+  static String userProfile([String? userId]) => userId != null ? '$baseUrl/users/profile/$userId' : '$baseUrl/users/profile';
   static String get updateProfile => '$baseUrl/users/profile';
+  static String userPosts([String? userId]) => userId != null ? '$baseUrl/users/$userId/posts' : '$baseUrl/users/posts';
   static String followUser(String userId) => '$baseUrl/users/$userId/follow';
   static String search(String query) =>
       '$baseUrl/search?q=${Uri.encodeComponent(query)}';
 
   // 3. Post & Feed Endpoints
   static String get feed => '$baseUrl/posts/feed';
-  static String get reels => '$baseUrl/posts/reels';
+  static String reels({int page = 1, int limit = 10}) => '$baseUrl/reels?page=$page&limit=$limit';
   static String exploreCategory(String category, {int page = 1, int limit = 10}) =>
       '$baseUrl/posts/explore?category=${Uri.encodeComponent(category)}&page=$page&limit=$limit';
   static String get createPost => '$baseUrl/posts';
@@ -55,4 +56,8 @@ class ApiEndpoints {
 
   // 4. Story Endpoints
   static String get stories => '$baseUrl/stories';
+
+  // 5. Bookmark Endpoints
+  static String bookmarkPost(String postId) => '$baseUrl/posts/$postId/bookmark';
+  static String get getBookmarks => '$baseUrl/users/bookmarks';
 }

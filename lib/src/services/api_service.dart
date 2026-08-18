@@ -240,7 +240,7 @@ class ApiService extends ChangeNotifier {
 
   /// 2.1 Get User Profile
   /// `GET /api/v1/users/profile/:userId`
-  Future<AppUser> getUserProfile(String userId) async {
+  Future<AppUser> getUserProfile([String? userId]) async {
     final response = await _httpGet(
       ApiEndpoints.userProfile(userId),
       requireAuth: true,
@@ -257,6 +257,9 @@ class ApiService extends ChangeNotifier {
     String? bio,
     String? avatarUrl,
     String? username,
+    bool? isPrivate,
+    String? website,
+    String? gender,
   }) async {
     _setLoading(true);
     try {
@@ -265,6 +268,9 @@ class ApiService extends ChangeNotifier {
       if (bio != null) body['bio'] = bio;
       if (avatarUrl != null) body['avatarUrl'] = avatarUrl;
       if (username != null) body['username'] = username;
+      if (isPrivate != null) body['isPrivate'] = isPrivate;
+      if (website != null) body['website'] = website;
+      if (gender != null) body['gender'] = gender;
 
       final response = await _httpPut(
         ApiEndpoints.updateProfile,
@@ -306,7 +312,8 @@ class ApiService extends ChangeNotifier {
       ApiEndpoints.search(query),
       requireAuth: true,
     );
-    return _handleResponse(response) as List<dynamic>;
+    final data = _handleResponse(response);
+    return data['data'] as List<dynamic>? ?? [];
   }
 
   // ── 3. POSTS & FEED APIs ──────────────────────────────────────────────────
@@ -316,8 +323,34 @@ class ApiService extends ChangeNotifier {
   Future<List<Post>> getFeedPosts() async {
     final response = await _httpGet(ApiEndpoints.feed, requireAuth: true);
 
-    final List<dynamic> data = _handleResponse(response);
-    return data
+    final data = _handleResponse(response);
+    final List<dynamic> jsonList = data['data'] ?? [];
+    return jsonList
+        .map((json) => Post.fromJson(json as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// 3.1.2 Get User Posts
+  /// `GET /api/v1/users/:userId/posts` or `GET /api/v1/users/posts`
+  Future<List<Post>> getUserPosts([String? userId]) async {
+    final response = await _httpGet(ApiEndpoints.userPosts(userId), requireAuth: true);
+
+    final data = _handleResponse(response);
+    final List<dynamic> jsonList = data['data'] ?? [];
+    return jsonList
+        .map((json) => Post.fromJson(json as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// 3.1.5 Get Reels
+  /// `GET /api/v1/reels?page=...&limit=...`
+  Future<List<Post>> getReels({int page = 1, int limit = 10}) async {
+    final response = await _httpGet(ApiEndpoints.reels(page: page, limit: limit), requireAuth: true);
+
+    final data = _handleResponse(response);
+    print('REELS API RESPONSE: $data');
+    final List<dynamic> jsonList = data['data'] ?? [];
+    return jsonList
         .map((json) => Post.fromJson(json as Map<String, dynamic>))
         .toList();
   }
@@ -334,8 +367,9 @@ class ApiService extends ChangeNotifier {
       requireAuth: true,
     );
 
-    final List<dynamic> data = _handleResponse(response);
-    return data
+    final data = _handleResponse(response);
+    final List<dynamic> jsonList = data['data'] ?? [];
+    return jsonList
         .map((json) => Post.fromJson(json as Map<String, dynamic>))
         .toList();
   }
@@ -382,16 +416,19 @@ class ApiService extends ChangeNotifier {
       requireAuth: true,
     );
 
-    final List<dynamic> data = _handleResponse(response);
-    return data.map((e) => Post.fromJson(e as Map<String, dynamic>)).toList();
+    final data = _handleResponse(response);
+    final List<dynamic> jsonList = data['data'] ?? [];
+    return jsonList.map((e) => Post.fromJson(e as Map<String, dynamic>)).toList();
   }
 
   /// 3.4 Get Reels Feed
   /// `GET /api/v1/posts/reels`
-  Future<List<Post>> getReels() async {
-    final response = await _httpGet(ApiEndpoints.reels, requireAuth: false);
-    final List<dynamic> data = _handleResponse(response);
-    return data.map((e) => Post.fromJson(e as Map<String, dynamic>)).toList();
+  Future<List<Post>> getReelsFeed() async {
+    final response = await _httpGet(ApiEndpoints.reels(), requireAuth: false);
+    final data = _handleResponse(response);
+    print('REELS FEED API RESPONSE: $data');
+    final List<dynamic> jsonList = data['data'] ?? [];
+    return jsonList.map((e) => Post.fromJson(e as Map<String, dynamic>)).toList();
   }
 
   // ── 4. STORY APIs ────────────────────────────────────────────────────────
@@ -400,7 +437,8 @@ class ApiService extends ChangeNotifier {
   /// `GET /api/v1/stories`
   Future<List<dynamic>> getStories() async {
     final response = await _httpGet(ApiEndpoints.stories, requireAuth: false);
-    return _handleResponse(response) as List<dynamic>;
+    final data = _handleResponse(response);
+    return data['data'] as List<dynamic>? ?? [];
   }
 
   /// 4.2 Create Story
@@ -442,6 +480,33 @@ class ApiService extends ChangeNotifier {
 
     final data = _handleResponse(response);
     return Comment.fromJson(data);
+  }
+
+  // ── 6. BOOKMARKS APIs ──────────────────────────────────────────────────────
+
+  /// 6.1 Toggle Bookmark
+  /// `POST /api/v1/posts/:postId/bookmark`
+  Future<void> toggleBookmark(String postId) async {
+    final response = await _httpPost(
+      ApiEndpoints.bookmarkPost(postId),
+      requireAuth: true,
+    );
+    _handleResponse(response);
+  }
+
+  /// 6.2 Get Bookmarks
+  /// `GET /api/v1/users/bookmarks?page=...&limit=...`
+  Future<List<Post>> getBookmarks({int page = 1, int limit = 10}) async {
+    final response = await _httpGet(
+      '${ApiEndpoints.getBookmarks}?page=$page&limit=$limit',
+      requireAuth: true,
+    );
+    final data = _handleResponse(response);
+    final List<dynamic> jsonList = data['bookmarks'] ?? data['data'] ?? [];
+    return jsonList.map((e) {
+      final postJson = e['post'] as Map<String, dynamic>? ?? e as Map<String, dynamic>;
+      return Post.fromJson(postJson);
+    }).toList();
   }
 
   // ── RESPONSE HANDLER & UTILS ──────────────────────────────────────────────

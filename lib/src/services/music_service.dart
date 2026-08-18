@@ -35,9 +35,12 @@ class MusicService {
     await _audioPlayer.stop();
     _currentUrl = url;
     await _audioPlayer.setVolume(_isMuted ? 0.0 : 1.0);
-    await _audioPlayer.play(UrlSource(url));
+    try {
+      await _audioPlayer.play(UrlSource(url));
+    } catch (e) {
+      print('Failed to play audio: $e');
+    }
   }
-
   Future<void> pause() async {
     await _audioPlayer.pause();
   }

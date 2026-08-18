@@ -11,11 +11,13 @@ class PostTile extends StatelessWidget {
     required this.feedService,
     required this.post,
     required this.posts,
+    required this.heroTag,
   });
 
   final FeedService feedService;
   final Post post;
   final List<Post> posts;
+  final String heroTag;
 
   @override
   Widget build(BuildContext context) {
@@ -27,6 +29,7 @@ class PostTile extends StatelessWidget {
             'post': post,
             'posts': posts,
             'feedService': feedService,
+            'heroTag': heroTag,
           },
         );
       },
@@ -34,7 +37,7 @@ class PostTile extends StatelessWidget {
         fit: StackFit.expand,
         children: [
           Hero(
-            tag: 'post_image_${post.id}',
+            tag: heroTag,
             child: Material(
               color: Colors.transparent,
               child: MediaImage(

@@ -21,4 +21,6 @@ extension AdaptiveColors on BuildContext {
       _dark ? AppColors.darkBackground : AppColors.background;
 
   Color get borderColor => _dark ? AppColors.border : AppColors.darkBorder;
+
+  Color get primaryColor => _dark ? AppColors.primaryDark : AppColors.primary;
 }

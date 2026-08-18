@@ -169,11 +169,15 @@ class AuthService extends ChangeNotifier {
     return AuthResult(success: true, user: user);
   }
 
-  void updateCurrentUser(AppUser updated) async {
+  void syncCurrentUser(AppUser updated) {
     final index = _registeredUsers.indexWhere((u) => u.id == updated.id);
     if (index != -1) _registeredUsers[index] = updated;
     _currentUser = updated;
     notifyListeners();
+  }
+
+  void updateCurrentUser(AppUser updated) async {
+    syncCurrentUser(updated);
 
     try {
       await ApiService.instance.updateProfile(
@@ -181,6 +185,9 @@ class AuthService extends ChangeNotifier {
         bio: updated.bio,
         avatarUrl: updated.avatarUrl,
         username: updated.username,
+        isPrivate: updated.isPrivate,
+        website: updated.website,
+        gender: updated.gender,
       );
     } catch (e) {
       debugPrint('REST API updateProfile error: $e');

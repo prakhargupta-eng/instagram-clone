@@ -9,6 +9,7 @@ import '../../data/mock_data.dart';
 import '../../models/post.dart';
 import '../../models/user.dart';
 import '../../services/feed_service.dart';
+import '../../services/api_service.dart';
 import '../../services/video_cache_service.dart';
 import '../../widgets/avatar.dart';
 import '../../widgets/shader_filter_widget.dart';
@@ -38,6 +39,66 @@ class _ReelsScreenState extends State<ReelsScreen> {
     initialPage: widget.initialIndex,
   );
   late int _currentPage = widget.initialIndex;
+  
+  final List<Post> _reels = [];
+  int _page = 1;
+  bool _hasMore = true;
+  bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchReels();
+  }
+
+  Future<void> _fetchReels() async {
+    if (_isLoading || !_hasMore) return;
+    setState(() => _isLoading = true);
+
+    try {
+      final newReels = await ApiService.instance.getReels(page: _page, limit: 10);
+      if (mounted) {
+        if (newReels.isNotEmpty) {
+          _reels.addAll(newReels);
+          widget.feedService.mergePosts(newReels);
+          _page++;
+          _prefetchNextVideos(_currentPage);
+        } else {
+          _hasMore = false;
+        }
+      }
+    } catch (e) {
+      debugPrint('Failed to fetch reels: $e');
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  void _onPageChanged(int index) {
+    setState(() => _currentPage = index);
+    if (_reels.isEmpty) return;
+    
+    final reelIndex = index % _reels.length;
+    _prefetchNextVideos(reelIndex);
+
+    if (reelIndex >= _reels.length - 3) {
+      _fetchReels();
+    }
+  }
+
+  void _prefetchNextVideos(int currentIndex) {
+    if (_reels.isEmpty) return;
+    
+    for (int i = 1; i <= 2; i++) {
+      final nextIndex = (currentIndex + i) % _reels.length;
+      final nextReel = _reels[nextIndex];
+      if (nextReel.videoUrl.isNotEmpty) {
+        VideoCacheService.instance.getFile(nextReel.videoUrl);
+      }
+    }
+  }
 
   @override
   void dispose() {
@@ -47,48 +108,44 @@ class _ReelsScreenState extends State<ReelsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading && _reels.isEmpty) {
+      return const Scaffold(
+        backgroundColor: Colors.black,
+        body: Skeletonizer(
+          enabled: true,
+          enableSwitchAnimation: true,
+          child: ReelSkeleton(),
+        ),
+      );
+    }
+
+    final canPop = Navigator.canPop(context);
     return AnimatedBuilder(
       animation: widget.feedService,
       builder: (context, _) {
-        final rawReels = widget.feedService.posts.where((p) => p.isVideo).toList();
-        final isLoading = widget.feedService.isLoading;
-        if (isLoading && rawReels.isEmpty) {
-          return const Scaffold(
-            backgroundColor: Colors.black,
-            body: Skeletonizer(
-              enabled: true,
-              enableSwitchAnimation: true,
-              child: ReelSkeleton(),
-            ),
-          );
-        }
+        final updatedReels = _reels.map((r) => 
+          widget.feedService.posts.firstWhere((p) => p.id == r.id, orElse: () => r)
+        ).toList();
 
-        final reels = rawReels;
-
-        final canPop = Navigator.canPop(context);
         return Scaffold(
           backgroundColor: Colors.black,
-          body: Skeletonizer(
-            enabled: isLoading,
-            enableSwitchAnimation: true,
-            child: Stack(
-              children: [
-                reels.isEmpty
-                    ? const Center(
-                        child: Text(
-                          'No reels yet',
-                          style: TextStyle(color: Colors.white),
-                        ),
-                      )
-                    : PageView.builder(
+          body: Stack(
+            children: [
+              updatedReels.isEmpty
+                  ? const Center(
+                      child: Text(
+                        'No reels yet',
+                        style: TextStyle(color: Colors.white),
+                      ),
+                    )
+                  : PageView.builder(
                       controller: _controller,
                       scrollDirection: Axis.vertical,
                       itemCount: null,
-                      onPageChanged: (index) =>
-                          setState(() => _currentPage = index),
+                      onPageChanged: _onPageChanged,
                       itemBuilder: (context, index) {
-                        final reelIndex = index % reels.length;
-                        final post = reels[reelIndex];
+                        final reelIndex = index % updatedReels.length;
+                        final post = updatedReels[reelIndex];
                         return ReelItem(
                           key: ValueKey('${post.id}-$index'),
                           post: post,
@@ -119,10 +176,9 @@ class _ReelsScreenState extends State<ReelsScreen> {
                 ),
             ],
           ),
-        ),
-      );
-    },
-  );
+        );
+      },
+    );
   }
 }
 
@@ -528,23 +584,17 @@ class _ReelItemState extends State<ReelItem>
           border: Border.all(color: Colors.white30, width: 2),
         ),
         child: Center(
-          child: Container(
-            width: 14,
-            height: 14,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: Colors.black,
-              image: post.author.avatarUrl.isNotEmpty
-                  ? DecorationImage(
-                      image: NetworkImage(post.author.avatarUrl),
-                      fit: BoxFit.cover,
-                    )
-                  : null,
-            ),
-            child: post.author.avatarUrl.isEmpty
-                ? const Icon(Icons.music_note, color: Colors.white, size: 8)
-                : null,
-          ),
+          child: post.author.avatarUrl.isNotEmpty
+              ? Avatar(url: post.author.avatarUrl, radius: 7, showRing: false)
+              : Container(
+                  width: 14,
+                  height: 14,
+                  decoration: const BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.black,
+                  ),
+                  child: const Icon(Icons.music_note, color: Colors.white, size: 8),
+                ),
         ),
       ),
     );

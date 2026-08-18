@@ -40,6 +40,7 @@ class AppRouter {
         final post = args['post'] as Post;
         final posts = args['posts'] as List<Post>?;
         final feedService = args['feedService'] as FeedService;
+        final heroTag = args['heroTag'] as String?;
 
         return MaterialPageRoute(
           settings: settings,
@@ -47,6 +48,7 @@ class AppRouter {
             post: post,
             posts: posts,
             feedService: feedService,
+            heroTag: heroTag,
           ),
         );
 

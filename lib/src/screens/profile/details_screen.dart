@@ -15,11 +15,13 @@ class DetailsScreen extends StatefulWidget {
     required this.post,
     this.posts,
     required this.feedService,
+    this.heroTag,
   });
 
   final Post post;
   final List<Post>? posts;
   final FeedService feedService;
+  final String? heroTag;
 
   @override
   State<DetailsScreen> createState() => _DetailsScreenState();
@@ -244,6 +246,7 @@ class _DetailsScreenState extends State<DetailsScreen> with RouteAware {
                       author: author,
                       isMuted: _isMuted,
                       isActive: _currentIndex == index && _isRouteActive,
+                      heroTag: post.id == widget.post.id ? widget.heroTag : null,
                       onMuteToggle: _toggleMute,
                       onLike: () {
                         widget.feedService.toggleLike(

@@ -24,7 +24,10 @@ class _HomeShellState extends State<HomeShell> {
   final FeedService _feedService = FeedService();
   int _selectedIndex = 0;
 
-  AppUser get _currentUser => widget.authService.currentUser!;
+  AppUser get _currentUser {
+    final user = widget.authService.currentUser!;
+    return user;
+  }
 
   @override
   void initState() {
@@ -119,8 +122,8 @@ class _HomeShellState extends State<HomeShell> {
                           : null,
                       child: Avatar(
                         url: _currentUser.avatarUrl,
-                        radius: 14,
-                        showRing: false,
+                            radius: 14,
+                            showRing: false,
                       ),
                     ),
                   ),

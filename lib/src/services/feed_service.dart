@@ -22,20 +22,101 @@ class FeedService extends ChangeNotifier {
 
   AppUser? userById(String id) => _usersById[id];
 
+  final List<Post> _bookmarkedPosts = [];
+  List<Post> get bookmarkedPosts => _bookmarkedPosts;
+
+  int _bookmarksPage = 1;
+  bool _bookmarksHasMore = true;
+  bool get bookmarksHasMore => _bookmarksHasMore;
+
   bool isBookmarked(String postId) => _bookmarkedPostIds.contains(postId);
 
-  void toggleBookmark(String postId) {
-    if (_bookmarkedPostIds.contains(postId)) {
+  Future<void> toggleBookmark(String postId) async {
+    final wasBookmarked = _bookmarkedPostIds.contains(postId);
+    // Optimistic UI update
+    if (wasBookmarked) {
       _bookmarkedPostIds.remove(postId);
+      _bookmarkedPosts.removeWhere((p) => p.id == postId);
     } else {
       _bookmarkedPostIds.add(postId);
+      // We don't have the full Post object here to add to _bookmarkedPosts,
+      // but if the user views the bookmarks tab, it will refetch.
+      // Alternatively, we could fetch it if needed.
     }
     notifyListeners();
+
+    try {
+      await ApiService.instance.toggleBookmark(postId);
+    } catch (e) {
+      debugPrint('REST API toggleBookmark error: $e');
+      // Revert if API fails
+      if (wasBookmarked) {
+        _bookmarkedPostIds.add(postId);
+      } else {
+        _bookmarkedPostIds.remove(postId);
+      }
+      notifyListeners();
+    }
+  }
+
+  Future<void> fetchBookmarks({bool loadMore = false}) async {
+    if (loadMore && !_bookmarksHasMore) return;
+
+    try {
+      final pageToLoad = loadMore ? _bookmarksPage + 1 : 1;
+      final posts = await ApiService.instance.getBookmarks(
+        page: pageToLoad,
+        limit: 10,
+      );
+
+      if (!loadMore) {
+        _bookmarkedPosts.clear();
+        _bookmarkedPostIds.clear();
+      }
+
+      if (posts.isNotEmpty) {
+        _bookmarkedPosts.addAll(posts);
+        _bookmarkedPostIds.addAll(posts.map((p) => p.id));
+        _bookmarksPage = pageToLoad;
+        _bookmarksHasMore = posts.length >= 10;
+      } else {
+        _bookmarksHasMore = false;
+      }
+      notifyListeners();
+    } catch (e) {
+      debugPrint('REST API fetchBookmarks error: $e');
+    }
   }
 
   void ensureUserRegistered(AppUser user) {
     if (!_usersById.containsKey(user.id)) {
       _usersById[user.id] = user;
+    }
+  }
+
+  void updateUser(AppUser user) {
+    _usersById[user.id] = user;
+    notifyListeners();
+  }
+
+  void mergePosts(List<Post> newPosts) {
+    for (final post in newPosts) {
+      final index = _posts.indexWhere((p) => p.id == post.id);
+      if (index != -1) {
+        _posts[index] = post;
+      } else {
+        _posts.add(post);
+      }
+    }
+    syncBookmarksFromPosts(newPosts);
+    notifyListeners();
+  }
+
+  void syncBookmarksFromPosts(Iterable<Post> newPosts) {
+    for (final p in newPosts) {
+      if (p.isBookmarked) {
+        _bookmarkedPostIds.add(p.id);
+      }
     }
   }
 
@@ -47,6 +128,7 @@ class FeedService extends ChangeNotifier {
       if (remotePosts.isNotEmpty) {
         _posts.clear();
         _posts.addAll(remotePosts);
+        syncBookmarksFromPosts(remotePosts);
       }
     } catch (e) {
       debugPrint('REST API Feed fetch error: $e');
@@ -67,6 +149,7 @@ class FeedService extends ChangeNotifier {
       final remotePosts = await ApiService.instance.getFeedPosts();
       _posts.clear();
       _posts.addAll(remotePosts);
+      syncBookmarksFromPosts(remotePosts);
     } catch (e) {
       debugPrint('FeedService init REST error: $e');
     } finally {
@@ -107,13 +190,19 @@ class FeedService extends ChangeNotifier {
     final followee = _usersById[followeeId];
     if (follower != null) {
       final updatedFollower = follower.copyWith(
-        following: (follower.following + (wasFollowing ? -1 : 1)).clamp(0, 999999),
+        following: (follower.following + (wasFollowing ? -1 : 1)).clamp(
+          0,
+          999999,
+        ),
       );
       _usersById[followerId] = updatedFollower;
     }
     if (followee != null) {
       final updatedFollowee = followee.copyWith(
-        followers: (followee.followers + (wasFollowing ? -1 : 1)).clamp(0, 999999),
+        followers: (followee.followers + (wasFollowing ? -1 : 1)).clamp(
+          0,
+          999999,
+        ),
       );
       _usersById[followeeId] = updatedFollowee;
     }
@@ -128,9 +217,7 @@ class FeedService extends ChangeNotifier {
 
   List<Post> followingFeed(AppUser user) {
     final followed = followingIdsOf(user.id);
-    final result = _posts
-        .where((p) => followed.contains(p.author.id))
-        .toList()
+    final result = _posts.where((p) => followed.contains(p.author.id)).toList()
       ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
     return result;
   }
@@ -142,8 +229,12 @@ class FeedService extends ChangeNotifier {
 
     final othersSorted = others.toList()
       ..sort((a, b) {
-        final aLikes = a.likedBy.contains(user.id) ? a.likedBy.length - 1 : a.likedBy.length;
-        final bLikes = b.likedBy.contains(user.id) ? b.likedBy.length - 1 : b.likedBy.length;
+        final aLikes = a.likedBy.contains(user.id)
+            ? a.likedBy.length - 1
+            : a.likedBy.length;
+        final bLikes = b.likedBy.contains(user.id)
+            ? b.likedBy.length - 1
+            : b.likedBy.length;
         return bLikes.compareTo(aLikes);
       });
 
@@ -180,8 +271,7 @@ class FeedService extends ChangeNotifier {
     }).toList();
 
     final result = activeStories.where((s) {
-      return s.user.id == user.id ||
-          followed.contains(s.user.id);
+      return s.user.id == user.id || followed.contains(s.user.id);
     }).toList();
 
     final seen = <String>{};

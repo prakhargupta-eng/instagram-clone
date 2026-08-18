@@ -9,10 +9,12 @@ import '../../models/post.dart';
 import '../../models/user.dart';
 import '../../services/auth_service.dart';
 import '../../services/feed_service.dart';
+import '../../services/api_service.dart';
 import '../../widgets/avatar.dart';
 import '../../widgets/ui_skeletons.dart';
 import 'edit_profile_screen.dart';
 import 'changePassword.dart';
+import 'bookmarks/bookmarks_screen.dart';
 import 'compontes/Stat.dart';
 import 'compontes/EmptyTab.dart';
 import 'compontes/postTitle.dart';
@@ -39,14 +41,62 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen>
     with SingleTickerProviderStateMixin {
   late final TabController _tabController;
+  AppUser? _fetchedUser;
+  List<Post> _userPosts = [];
+  bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(
-      length: 3,
-      vsync: this,
-    );
+    _tabController = TabController(length: 3, vsync: this);
+    _fetchProfile();
+  }
+
+  Future<void> _fetchProfile() async {
+    debugPrint('Starting _fetchProfile...');
+    setState(() {
+      _isLoading = true;
+    });
+    try {
+      final bool isCurrent = _isCurrentUser;
+      final String? targetId = isCurrent ? null : widget.user.id;
+      debugPrint('_fetchProfile targetId: $targetId');
+      final user = await ApiService.instance.getUserProfile(targetId);
+      debugPrint('_fetchProfile fetched user profile successfully.');
+      if (mounted) {
+        widget.feedService.updateUser(user);
+        if (isCurrent) {
+          widget.authService?.syncCurrentUser(user);
+        }
+        setState(() {
+          _fetchedUser = user;
+        });
+      }
+
+      if (_fetchedUser?.isPrivate == true && !isCurrent) {
+        debugPrint('_fetchProfile: User is private, skipping posts fetch.');
+        _isLoading = false;
+        return;
+      }
+      // Fetch posts after fetching user profile so the grid can display them
+      debugPrint('_fetchProfile fetching posts...');
+      final posts = await ApiService.instance.getUserPosts(targetId);
+      debugPrint('_fetchProfile fetched ${posts.length} posts.');
+      if (mounted) {
+        setState(() {
+          _userPosts = posts;
+        });
+      }
+    } catch (e) {
+      debugPrint('Failed to fetch profile: $e');
+    } finally {
+      debugPrint('Ending _fetchProfile...');
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
   }
 
   FeedService get feedService => widget.feedService;
@@ -54,9 +104,9 @@ class _ProfileScreenState extends State<ProfileScreen>
   AppUser get _displayUser {
     final currentUser = widget.authService?.currentUser;
     if (currentUser != null && currentUser.id == widget.user.id) {
-      return currentUser;
+      return _fetchedUser ?? currentUser;
     }
-    return widget.user;
+    return _fetchedUser ?? widget.user;
   }
 
   bool get _isCurrentUser {
@@ -115,9 +165,7 @@ class _ProfileScreenState extends State<ProfileScreen>
         builder: (context, _) {
           final displayUser = _displayUser;
           final liveUser = feedService.userById(displayUser.id) ?? displayUser;
-          final posts = feedService.posts
-              .where((p) => p.author.id == displayUser.id)
-              .toList();
+          final posts = _userPosts;
           final isFollowing = widget.authService?.currentUser == null
               ? false
               : feedService.isFollowing(
@@ -125,7 +173,10 @@ class _ProfileScreenState extends State<ProfileScreen>
                   displayUser.id,
                 );
 
-          final isLoading = feedService.isLoading;
+          final isPrivateAndHidden =
+              displayUser.isPrivate && !_isCurrentUser && !isFollowing;
+
+          final isLoading = _isLoading;
           if (isLoading && posts.isEmpty) {
             return const Skeletonizer(
               enabled: true,
@@ -137,165 +188,215 @@ class _ProfileScreenState extends State<ProfileScreen>
           return Skeletonizer(
             enabled: isLoading,
             enableSwitchAnimation: true,
-            child: ListView(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              children: [
-                const SizedBox(height: 8),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Avatar(url: displayUser.avatarUrl, radius: 40),
-                    const SizedBox(width: 24),
-                    Expanded(
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceAround,
+            child: RefreshIndicator(
+              onRefresh: () async {
+                await _fetchProfile();
+                if (_displayUser.isPrivate) {
+                  return;
+                }
+                Future.delayed(const Duration(seconds: 5));
+                await feedService.refreshFeed();
+              },
+              child: ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                children: [
+                  const SizedBox(height: 8),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Avatar(url: displayUser.avatarUrl, radius: 40),
+                      const SizedBox(width: 24),
+                      Expanded(
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceAround,
+                          children: [
+                            Stat(
+                              label: formatCount(
+                                liveUser.postsCount > posts.length
+                                    ? liveUser.postsCount
+                                    : posts.length,
+                              ),
+                              value: 'Posts',
+                            ),
+                            Stat(
+                              label: formatCount(liveUser.followers),
+                              value: 'Followers',
+                            ),
+                            Stat(
+                              label: formatCount(liveUser.following),
+                              value: 'Following',
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    displayUser.fullName,
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  if (displayUser.bio.isNotEmpty) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      displayUser.bio,
+                      style: TextStyle(color: context.textSecondaryColor),
+                    ),
+                  ],
+                  if (displayUser.website.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    GestureDetector(
+                      onTap: () {
+                        ToastHelper.showToast(
+                          context,
+                          "Opening: ${displayUser.website}",
+                        );
+                      },
+                      child: Text(
+                        displayUser.website,
+                        style: const TextStyle(
+                          color: Colors.blue,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 12),
+                  if (_isCurrentUser)
+                    Row(
+                      children: [
+                        Expanded(
+                          child: SizedBox(
+                            height: 32,
+                            child: OutlinedButton(
+                              onPressed: () => _openEditProfile(context),
+                              style: OutlinedButton.styleFrom(
+                                side: BorderSide(
+                                  color: context.borderColor,
+                                  width: 0.8,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                padding: EdgeInsets.zero,
+                              ),
+                              child: Text(
+                                'Edit profile',
+                                style: TextStyle(
+                                  color: context.textPrimaryColor,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: SizedBox(
+                            height: 32,
+                            child: OutlinedButton(
+                              onPressed: () => ShareHelper.copyProfileLink(
+                                context,
+                                displayUser.username,
+                              ),
+                              style: OutlinedButton.styleFrom(
+                                side: BorderSide(
+                                  color: context.borderColor,
+                                  width: 0.8,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                padding: EdgeInsets.zero,
+                              ),
+                              child: Text(
+                                'Share profile',
+                                style: TextStyle(
+                                  color: context.textPrimaryColor,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    )
+                  else
+                    SizedBox(
+                      height: 32,
+                      child: OutlinedButton(
+                        onPressed: () => _toggleFollow(context),
+                        style: OutlinedButton.styleFrom(
+                          side: BorderSide(
+                            color: context.borderColor,
+                            width: 0.8,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                        ),
+                        child: Text(
+                          _buttonLabel(isFollowing),
+                          style: TextStyle(
+                            color: context.textPrimaryColor,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+                  const SizedBox(height: 12),
+                  if (isPrivateAndHidden)
+                    Container(
+                      height: 300,
+                      alignment: Alignment.center,
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Stat(
-                            label: formatCount(posts.length),
-                            value: 'Posts',
+                          Icon(
+                            Icons.lock_outline,
+                            size: 64,
+                            color: context.textSecondaryColor,
                           ),
-                          Stat(
-                            label: formatCount(liveUser.followers),
-                            value: 'Followers',
+                          const SizedBox(height: 16),
+                          Text(
+                            'This account is private',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: context.textPrimaryColor,
+                            ),
                           ),
-                          Stat(
-                            label: formatCount(liveUser.following),
-                            value: 'Following',
+                          const SizedBox(height: 8),
+                          Text(
+                            'Follow this account to see their photos and videos.',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: context.textSecondaryColor,
+                            ),
+                            textAlign: TextAlign.center,
                           ),
+                        ],
+                      ),
+                    )
+                  else ...[
+                    _buildTabBar(),
+                    SizedBox(
+                      height: 420,
+                      child: TabBarView(
+                        controller: _tabController,
+                        children: [
+                          _buildPostsTab(posts),
+                          _buildReelsTab(posts),
+                          _buildTaggedTab(feedService.posts, displayUser),
                         ],
                       ),
                     ),
                   ],
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  displayUser.fullName,
-                  style: const TextStyle(fontWeight: FontWeight.w600),
-                ),
-                if (displayUser.bio.isNotEmpty) ...[
-                  const SizedBox(height: 2),
-                  Text(
-                    displayUser.bio,
-                    style: TextStyle(color: context.textSecondaryColor),
-                  ),
                 ],
-                if (displayUser.website.isNotEmpty) ...[
-                  const SizedBox(height: 4),
-                  GestureDetector(
-                    onTap: () {
-                      ToastHelper.showToast(
-                        context,
-                        "Opening: ${displayUser.website}",
-                      );
-                    },
-                    child: Text(
-                      displayUser.website,
-                      style: const TextStyle(
-                        color: Colors.blue,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
-                ],
-                const SizedBox(height: 12),
-                if (_isCurrentUser)
-                  Row(
-                    children: [
-                      Expanded(
-                        child: SizedBox(
-                          height: 32,
-                          child: OutlinedButton(
-                            onPressed: () => _openEditProfile(context),
-                            style: OutlinedButton.styleFrom(
-                              side: BorderSide(
-                                color: context.borderColor,
-                                width: 0.8,
-                              ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              padding: EdgeInsets.zero,
-                            ),
-                            child: Text(
-                              'Edit profile',
-                              style: TextStyle(
-                                color: context.textPrimaryColor,
-                                fontWeight: FontWeight.w600,
-                                fontSize: 13,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: SizedBox(
-                          height: 32,
-                          child: OutlinedButton(
-                            onPressed: () => ShareHelper.copyProfileLink(
-                              context,
-                              displayUser.username,
-                            ),
-                            style: OutlinedButton.styleFrom(
-                              side: BorderSide(
-                                color: context.borderColor,
-                                width: 0.8,
-                              ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              padding: EdgeInsets.zero,
-                            ),
-                            child: Text(
-                              'Share profile',
-                              style: TextStyle(
-                                color: context.textPrimaryColor,
-                                fontWeight: FontWeight.w600,
-                                fontSize: 13,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  )
-                else
-                  SizedBox(
-                    height: 32,
-                    child: OutlinedButton(
-                      onPressed: () => _toggleFollow(context),
-                      style: OutlinedButton.styleFrom(
-                        side: BorderSide(
-                          color: context.borderColor,
-                          width: 0.8,
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                      ),
-                      child: Text(
-                        _buttonLabel(isFollowing),
-                        style: TextStyle(
-                          color: context.textPrimaryColor,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ),
-                const SizedBox(height: 12),
-                _buildTabBar(),
-                SizedBox(
-                  height: 420,
-                  child: TabBarView(
-                    controller: _tabController,
-                    children: [
-                      _buildPostsTab(posts),
-                      _buildReelsTab(posts),
-                      _buildTaggedTab(feedService.posts, displayUser),
-                    ],
-                  ),
-                ),
-              ],
+              ),
             ),
           );
         },
@@ -334,8 +435,12 @@ class _ProfileScreenState extends State<ProfileScreen>
         crossAxisSpacing: 2,
       ),
       itemCount: posts.length,
-      itemBuilder: (context, index) =>
-          PostTile(feedService: feedService, post: posts[index], posts: posts),
+      itemBuilder: (context, index) => PostTile(
+        feedService: feedService,
+        post: posts[index],
+        posts: posts,
+        heroTag: 'posts_${posts[index].id}',
+      ),
     );
   }
 
@@ -350,8 +455,12 @@ class _ProfileScreenState extends State<ProfileScreen>
         crossAxisSpacing: 2,
       ),
       itemCount: reels.length,
-      itemBuilder: (context, index) =>
-          PostTile(feedService: feedService, post: reels[index], posts: reels),
+      itemBuilder: (context, index) => PostTile(
+        feedService: feedService,
+        post: reels[index],
+        posts: reels,
+        heroTag: 'reels_${reels[index].id}',
+      ),
     );
   }
 
@@ -379,6 +488,7 @@ class _ProfileScreenState extends State<ProfileScreen>
         feedService: feedService,
         post: taggedPosts[index],
         posts: taggedPosts,
+        heroTag: 'tagged_${taggedPosts[index].id}',
       ),
     );
   }
@@ -389,15 +499,23 @@ class _ProfileScreenState extends State<ProfileScreen>
   }
 
   void _openEditProfile(BuildContext context) {
-    final auth = widget.authService!;
+    final auth = widget.authService ?? AppScope.of(context).authService;
     final currentUser = auth.currentUser;
-    if (currentUser == null) return;
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) =>
-            EditProfileScreen(authService: auth, user: currentUser),
-      ),
-    );
+
+    if (currentUser == null) {
+      return;
+    }
+
+    try {
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) =>
+              EditProfileScreen(authService: auth, user: currentUser),
+        ),
+      );
+    } catch (e, t) {
+      // Ignored
+    }
   }
 
   void _toggleFollow(BuildContext context) {
@@ -483,6 +601,21 @@ class _ProfileScreenState extends State<ProfileScreen>
         },
       ),
       ListTile(
+        leading: const Icon(Icons.bookmark_border),
+        title: const Text(
+          'Saved',
+          style: TextStyle(fontWeight: FontWeight.w500),
+        ),
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => BookmarksScreen(feedService: feedService),
+            ),
+          );
+        },
+      ),
+      ListTile(
         leading: const Icon(Icons.password),
         title: const Text(
           AppStrings.changePassword,
@@ -506,7 +639,7 @@ class _ProfileScreenState extends State<ProfileScreen>
         ),
         onTap: () {
           Navigator.of(ctx).pop();
-          _confirmLogout(ctx);
+          _confirmLogout();
         },
       ),
       const Divider(height: 1),
@@ -518,15 +651,15 @@ class _ProfileScreenState extends State<ProfileScreen>
         ),
         onTap: () {
           Navigator.of(ctx).pop();
-          _confirmDeleteAccount(ctx);
+          _confirmDeleteAccount();
         },
       ),
     ];
   }
 
-  Future<void> _confirmLogout(BuildContext ctx) async {
+  Future<void> _confirmLogout() async {
     final confirmed = await showDialog<bool>(
-      context: ctx,
+      context: context,
       builder: (context) => AlertDialog(
         title: const Text(AppStrings.logoutTitle),
         content: const Text(AppStrings.logoutConfirm),
@@ -546,12 +679,13 @@ class _ProfileScreenState extends State<ProfileScreen>
       await widget.authService?.logout();
       if (!mounted) return;
       ToastHelper.showToast(context, "Logged out successfully.");
+      Navigator.of(context).popUntil((route) => route.isFirst);
     }
   }
 
-  Future<void> _confirmDeleteAccount(BuildContext ctx) async {
+  Future<void> _confirmDeleteAccount() async {
     final confirmed = await showDialog<bool>(
-      context: ctx,
+      context: context,
       builder: (context) => AlertDialog(
         title: const Text(AppStrings.deleteAccountTitle),
         content: const Text(AppStrings.deleteAccountConfirm),
@@ -575,9 +709,13 @@ class _ProfileScreenState extends State<ProfileScreen>
         await widget.authService?.deleteAccount();
         if (!mounted) return;
         ToastHelper.showToast(context, "Account deleted successfully.");
+        Navigator.of(context).popUntil((route) => route.isFirst);
       } catch (e) {
         if (!mounted) return;
-        ToastHelper.showToast(context, "Failed to delete account. Please try again.");
+        ToastHelper.showToast(
+          context,
+          "Failed to delete account. Please try again.",
+        );
       }
     }
   }

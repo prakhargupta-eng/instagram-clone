@@ -21,30 +21,32 @@ class PostCard extends StatefulWidget {
     super.key,
     required this.post,
     required this.currentUserId,
-    required this.onLike,
-    required this.onComment,
-    this.onTapMedia,
-    required this.isBookmarked,
-    this.onBookmark,
     required this.author,
-    this.isMuted = false,
     this.isActive = false,
+    this.isMuted = false,
+    this.onLike,
+    this.onComment,
     this.onMuteToggle,
+    this.onTapMedia,
+    this.isBookmarked = false,
+    this.onBookmark,
     this.onDelete,
+    this.heroTag,
   });
 
   final Post post;
   final String currentUserId;
-  final VoidCallback onLike;
-  final VoidCallback onComment;
+  final AppUser author;
+  final bool isActive;
+  final bool isMuted;
+  final VoidCallback? onLike;
+  final VoidCallback? onComment;
+  final VoidCallback? onMuteToggle;
   final VoidCallback? onTapMedia;
   final bool isBookmarked;
   final VoidCallback? onBookmark;
-  final AppUser author;
-  final bool isMuted;
-  final bool isActive;
-  final VoidCallback? onMuteToggle;
   final VoidCallback? onDelete;
+  final String? heroTag;
 
   @override
   State<PostCard> createState() => _PostCardState();
@@ -209,7 +211,7 @@ class _PostCardState extends State<PostCard>
 
   void _triggerDoubleTapLike() {
     if (!widget.post.isLikedBy(widget.currentUserId)) {
-      widget.onLike();
+      widget.onLike?.call();
     }
     setState(() {
       _showHeartOverlay = true;
@@ -332,7 +334,7 @@ class _PostCardState extends State<PostCard>
         alignment: Alignment.center,
         children: [
           Hero(
-            tag: 'post_image_${widget.post.id}',
+            tag: widget.heroTag ?? 'post_image_${widget.post.id}',
             child: Material(
               color: Colors.transparent,
               child: ColorFiltered(
