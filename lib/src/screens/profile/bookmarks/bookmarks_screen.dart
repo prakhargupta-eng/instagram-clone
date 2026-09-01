@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../adaptive_colors.dart';
 import '../../../services/feed_service.dart';
-import '../compontes/postTitle.dart';
+import '../widgets/postTitle.dart';
 import 'bookmarks_view_model.dart';
 
 class BookmarksScreen extends StatefulWidget {

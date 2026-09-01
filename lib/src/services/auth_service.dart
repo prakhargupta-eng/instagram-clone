@@ -1,10 +1,11 @@
-
 import 'package:flutter/foundation.dart';
 
 import '../constants.dart';
 import '../data/mock_data.dart';
 import '../models/user.dart';
-import 'api_service.dart';
+import '../repositories/api_client.dart';
+import '../repositories/auth_repository.dart';
+import '../repositories/user_repository.dart';
 
 class AuthResult {
   final bool success;
@@ -15,8 +16,6 @@ class AuthResult {
 }
 
 class AuthService extends ChangeNotifier {
-
-
   final Map<String, String> _passwords = {
     for (final u in MockDatabase.users) u.email: 'password123',
   };
@@ -39,11 +38,11 @@ class AuthService extends ChangeNotifier {
     if (_initialized) return;
     _initialized = true;
     try {
-      await ApiService.instance.initSession();
-      _currentUser = ApiService.instance.currentUser;
+      await ApiClient.instance.initSession();
+      _currentUser = ApiClient.instance.currentUser;
       
-      ApiService.instance.addListener(() {
-        if (ApiService.instance.currentUser == null && _currentUser != null) {
+      ApiClient.instance.addListener(() {
+        if (ApiClient.instance.currentUser == null && _currentUser != null) {
           _currentUser = null;
           notifyListeners();
         }
@@ -67,18 +66,20 @@ class AuthService extends ChangeNotifier {
       return const AuthResult(success: false, error: AppStrings.invalidEmail);
     }
 
-    try {
-      final user = await ApiService.instance.login(
-        email: normalized,
-        password: password,
-      );
-      _currentUser = user;
-      _sessionKey = DateTime.now().millisecondsSinceEpoch.toString();
-      notifyListeners();
-      return AuthResult(success: true, user: user);
-    } catch (apiError) {
-      return AuthResult(success: false, error: apiError.toString());
-    }
+    final result = await AuthRepository.instance.login(
+      email: normalized,
+      password: password,
+    );
+
+    return result.fold(
+      (failure) => AuthResult(success: false, error: failure.message),
+      (user) {
+        _currentUser = user;
+        _sessionKey = DateTime.now().millisecondsSinceEpoch.toString();
+        notifyListeners();
+        return AuthResult(success: true, user: user);
+      },
+    );
   }
 
   Future<AuthResult> signup({
@@ -105,47 +106,53 @@ class AuthService extends ChangeNotifier {
       );
     }
 
-    try {
-      final user = await ApiService.instance.register(
-        username: normalizedUsername,
-        fullName: fullName.trim(),
-        email: normalizedEmail,
-        password: password,
-      );
-      _currentUser = user;
-      _sessionKey = DateTime.now().millisecondsSinceEpoch.toString();
-      notifyListeners();
-      return AuthResult(success: true, user: user);
-    } catch (apiError) {
-      return AuthResult(success: false, error: apiError.toString());
-    }
+    final result = await AuthRepository.instance.register(
+      username: normalizedUsername,
+      fullName: fullName.trim(),
+      email: normalizedEmail,
+      password: password,
+    );
+
+    return result.fold(
+      (failure) => AuthResult(success: false, error: failure.message),
+      (user) {
+        _currentUser = user;
+        _sessionKey = DateTime.now().millisecondsSinceEpoch.toString();
+        notifyListeners();
+        return AuthResult(success: true, user: user);
+      },
+    );
   }
 
   Future<void> logout() async {
     _currentUser = null;
-    await ApiService.instance.logout();
+    await AuthRepository.instance.logout();
     notifyListeners();
   }
 
   Future<void> deleteAccount() async {
     final id = _currentUser?.id;
     if (id == null) return;
-    try {
-      await ApiService.instance.deleteAccount();
-      _registeredUsers.removeWhere((u) => u.id == id);
-      _currentUser = null;
-      notifyListeners();
-    } catch (e) {
-      debugPrint('REST API deleteAccount error: $e');
-      rethrow;
-    }
+    
+    final result = await AuthRepository.instance.deleteAccount();
+    
+    result.fold(
+      (failure) {
+        debugPrint('REST API deleteAccount error: ${failure.message}');
+        throw Exception(failure.message);
+      },
+      (_) {
+        _registeredUsers.removeWhere((u) => u.id == id);
+        _currentUser = null;
+        notifyListeners();
+      },
+    );
   }
 
   Future<AuthResult> changePassword({
     required String oldPassword,
     required String newPassword,
   }) async {
-    await Future.delayed(const Duration(milliseconds: 600));
     final user = _currentUser;
     if (user == null) {
       return const AuthResult(success: false, error: 'User is not logged in.');
@@ -179,18 +186,19 @@ class AuthService extends ChangeNotifier {
   void updateCurrentUser(AppUser updated) async {
     syncCurrentUser(updated);
 
-    try {
-      await ApiService.instance.updateProfile(
-        fullName: updated.fullName,
-        bio: updated.bio,
-        avatarUrl: updated.avatarUrl,
-        username: updated.username,
-        isPrivate: updated.isPrivate,
-        website: updated.website,
-        gender: updated.gender,
-      );
-    } catch (e) {
-      debugPrint('REST API updateProfile error: $e');
-    }
+    final result = await UserRepository.instance.updateProfile(
+      fullName: updated.fullName,
+      bio: updated.bio,
+      avatarUrl: updated.avatarUrl,
+      username: updated.username,
+      isPrivate: updated.isPrivate,
+      website: updated.website,
+      gender: updated.gender,
+    );
+
+    result.fold(
+      (failure) => debugPrint('REST API updateProfile error: ${failure.message}'),
+      (_) {},
+    );
   }
 }

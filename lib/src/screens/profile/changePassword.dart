@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import '../../adaptive_colors.dart';
-import 'package:instagram_clone/src/compontes/auth_text_field.dart';
+import 'package:instagram_clone/src/components/auth_text_field.dart';
 import 'package:instagram_clone/src/utils/validation.dart';
 import '../../services/auth_service.dart';
 import '../../constants.dart';
-import 'package:instagram_clone/src/compontes/ToastHelper.dart';
+import 'package:instagram_clone/src/components/ToastHelper.dart';
 
 class ChangePasswordScreen extends StatefulWidget {
   const ChangePasswordScreen({super.key, required this.authService});

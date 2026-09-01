@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 import '../../../adaptive_colors.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:instagram_clone/src/compontes/auth_text_field.dart';
+import 'package:instagram_clone/src/components/auth_text_field.dart';
 
 import '../../../blocs/auth/auth_bloc.dart';
 import '../../../constants.dart';
 import '../../../widgets/insta_logo.dart';
 import '../../../services/auth_service.dart';
 import '../../../utils/validation.dart';
-import 'package:instagram_clone/src/compontes/ToastHelper.dart';
+import 'package:instagram_clone/src/components/ToastHelper.dart';
 import 'signup_view_model.dart';
 
 import '../../home/home_shell.dart';

@@ -11,7 +11,7 @@ import '../services/video_cache_service.dart';
 import 'avatar.dart';
 import 'media_image.dart';
 import 'shader_filter_widget.dart';
-import 'package:instagram_clone/src/compontes/ToastHelper.dart';
+import 'package:instagram_clone/src/components/ToastHelper.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:get_thumbnail_video/video_thumbnail.dart';
 import 'package:get_thumbnail_video/index.dart';

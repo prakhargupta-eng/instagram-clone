@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:skeletonizer/skeletonizer.dart';
 import 'package:video_player/video_player.dart' as video;
-import 'package:instagram_clone/src/compontes/ToastHelper.dart';
+import 'package:instagram_clone/src/components/ToastHelper.dart';
 
 import '../../app.dart';
 import '../../constants.dart';
@@ -9,7 +9,7 @@ import '../../data/mock_data.dart';
 import '../../models/post.dart';
 import '../../models/user.dart';
 import '../../services/feed_service.dart';
-import '../../services/api_service.dart';
+import '../../repositories/post_repository.dart';
 import '../../services/video_cache_service.dart';
 import '../../widgets/avatar.dart';
 import '../../widgets/shader_filter_widget.dart';
@@ -56,16 +56,21 @@ class _ReelsScreenState extends State<ReelsScreen> {
     setState(() => _isLoading = true);
 
     try {
-      final newReels = await ApiService.instance.getReels(page: _page, limit: 10);
+      final result = await PostRepository.instance.getReels(page: _page, limit: 10);
       if (mounted) {
-        if (newReels.isNotEmpty) {
-          _reels.addAll(newReels);
-          widget.feedService.mergePosts(newReels);
-          _page++;
-          _prefetchNextVideos(_currentPage);
-        } else {
-          _hasMore = false;
-        }
+        result.fold(
+          (failure) => debugPrint('Failed to fetch reels: ${failure.message}'),
+          (newReels) {
+            if (newReels.isNotEmpty) {
+              _reels.addAll(newReels);
+              widget.feedService.mergePosts(newReels);
+              _page++;
+              _prefetchNextVideos(_currentPage);
+            } else {
+              _hasMore = false;
+            }
+          },
+        );
       }
     } catch (e) {
       debugPrint('Failed to fetch reels: $e');

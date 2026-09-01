@@ -1,7 +1,7 @@
 import 'dart:io';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
-import 'package:instagram_clone/src/compontes/ToastHelper.dart';
+import 'package:instagram_clone/src/components/ToastHelper.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:video_player/video_player.dart' as video;
 import 'package:get_thumbnail_video/video_thumbnail.dart';

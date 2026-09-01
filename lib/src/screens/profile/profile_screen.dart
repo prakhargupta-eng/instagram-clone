@@ -1,28 +1,25 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:skeletonizer/skeletonizer.dart';
 import '../../adaptive_colors.dart';
 import '../../app.dart';
 
 import '../../constants.dart';
-import '../../models/post.dart';
 import '../../models/user.dart';
 import '../../services/auth_service.dart';
 import '../../services/feed_service.dart';
-import '../../services/api_service.dart';
-import '../../widgets/avatar.dart';
+import '../../blocs/profile/profile_cubit.dart';
+import '../../blocs/profile/profile_state.dart';
 import '../../widgets/ui_skeletons.dart';
 import 'edit_profile_screen.dart';
 import 'changePassword.dart';
 import 'bookmarks/bookmarks_screen.dart';
-import 'compontes/Stat.dart';
-import 'compontes/EmptyTab.dart';
-import 'compontes/postTitle.dart';
-import 'package:instagram_clone/src/compontes/ToastHelper.dart';
-import '../../utils/number_helper.dart';
-import '../../utils/share_helper.dart';
+import 'widgets/profile_header_widget.dart';
+import 'widgets/private_profile_widget.dart';
+import 'widgets/profile_tabs_widget.dart';
+import 'package:instagram_clone/src/components/ToastHelper.dart';
 
-class ProfileScreen extends StatefulWidget {
+class ProfileScreen extends StatelessWidget {
   const ProfileScreen({
     super.key,
     required this.feedService,
@@ -35,83 +32,42 @@ class ProfileScreen extends StatefulWidget {
   final AuthService? authService;
 
   @override
-  State<ProfileScreen> createState() => _ProfileScreenState();
+  Widget build(BuildContext context) {
+    return BlocProvider(
+      create: (context) => ProfileCubit(
+        initialUser: user,
+        feedService: feedService,
+        authService: authService,
+      )..fetchProfile(),
+      child: _ProfileScreenContent(
+        feedService: feedService,
+        authService: authService,
+      ),
+    );
+  }
 }
 
-class _ProfileScreenState extends State<ProfileScreen>
+class _ProfileScreenContent extends StatefulWidget {
+  final FeedService feedService;
+  final AuthService? authService;
+
+  const _ProfileScreenContent({
+    required this.feedService,
+    required this.authService,
+  });
+
+  @override
+  State<_ProfileScreenContent> createState() => _ProfileScreenContentState();
+}
+
+class _ProfileScreenContentState extends State<_ProfileScreenContent>
     with SingleTickerProviderStateMixin {
   late final TabController _tabController;
-  AppUser? _fetchedUser;
-  List<Post> _userPosts = [];
-  bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
-    _fetchProfile();
-  }
-
-  Future<void> _fetchProfile() async {
-    debugPrint('Starting _fetchProfile...');
-    setState(() {
-      _isLoading = true;
-    });
-    try {
-      final bool isCurrent = _isCurrentUser;
-      final String? targetId = isCurrent ? null : widget.user.id;
-      debugPrint('_fetchProfile targetId: $targetId');
-      final user = await ApiService.instance.getUserProfile(targetId);
-      debugPrint('_fetchProfile fetched user profile successfully.');
-      if (mounted) {
-        widget.feedService.updateUser(user);
-        if (isCurrent) {
-          widget.authService?.syncCurrentUser(user);
-        }
-        setState(() {
-          _fetchedUser = user;
-        });
-      }
-
-      if (_fetchedUser?.isPrivate == true && !isCurrent) {
-        debugPrint('_fetchProfile: User is private, skipping posts fetch.');
-        _isLoading = false;
-        return;
-      }
-      // Fetch posts after fetching user profile so the grid can display them
-      debugPrint('_fetchProfile fetching posts...');
-      final posts = await ApiService.instance.getUserPosts(targetId);
-      debugPrint('_fetchProfile fetched ${posts.length} posts.');
-      if (mounted) {
-        setState(() {
-          _userPosts = posts;
-        });
-      }
-    } catch (e) {
-      debugPrint('Failed to fetch profile: $e');
-    } finally {
-      debugPrint('Ending _fetchProfile...');
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
-    }
-  }
-
-  FeedService get feedService => widget.feedService;
-
-  AppUser get _displayUser {
-    final currentUser = widget.authService?.currentUser;
-    if (currentUser != null && currentUser.id == widget.user.id) {
-      return _fetchedUser ?? currentUser;
-    }
-    return _fetchedUser ?? widget.user;
-  }
-
-  bool get _isCurrentUser {
-    final currentUserId = widget.authService?.currentUser?.id;
-    return currentUserId != null && currentUserId == widget.user.id;
   }
 
   @override
@@ -122,20 +78,32 @@ class _ProfileScreenState extends State<ProfileScreen>
 
   @override
   Widget build(BuildContext context) {
-    final listenable = Listenable.merge([feedService, widget.authService]);
-    return Scaffold(
-      backgroundColor: context.surfaceColor,
-      appBar: AppBar(
-        title: AnimatedBuilder(
-          animation: listenable,
-          builder: (context, _) {
-            final displayUser = _displayUser;
-            return Row(
+    return BlocBuilder<ProfileCubit, ProfileState>(
+      builder: (context, state) {
+        final displayUser = state.user;
+        final liveUser = widget.feedService.userById(displayUser.id) ?? displayUser;
+        final posts = state.posts;
+        final isCurrentUser = state.isCurrentUser;
+        
+        final isFollowing = widget.authService?.currentUser == null
+            ? false
+            : widget.feedService.isFollowing(
+                widget.authService!.currentUser!.id,
+                displayUser.id,
+              );
+
+        final isPrivateAndHidden =
+            displayUser.isPrivate && !isCurrentUser && !isFollowing;
+
+        return Scaffold(
+          backgroundColor: context.surfaceColor,
+          appBar: AppBar(
+            title: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 if (displayUser.isPrivate)
                   Padding(
-                    padding: EdgeInsets.only(right: 6),
+                    padding: const EdgeInsets.only(right: 6),
                     child: Icon(
                       Icons.lock_outline,
                       size: 16,
@@ -147,355 +115,64 @@ class _ProfileScreenState extends State<ProfileScreen>
                   style: const TextStyle(fontWeight: FontWeight.bold),
                 ),
               ],
-            );
-          },
-        ),
-        centerTitle: false,
-        actions: _isCurrentUser
-            ? [
-                IconButton(
-                  icon: const Icon(Icons.menu),
-                  onPressed: () => _showMenuSheet(context),
-                ),
-              ]
-            : null,
-      ),
-      body: AnimatedBuilder(
-        animation: listenable,
-        builder: (context, _) {
-          final displayUser = _displayUser;
-          final liveUser = feedService.userById(displayUser.id) ?? displayUser;
-          final posts = _userPosts;
-          final isFollowing = widget.authService?.currentUser == null
-              ? false
-              : feedService.isFollowing(
-                  widget.authService!.currentUser!.id,
-                  displayUser.id,
+            ),
+            centerTitle: false,
+            actions: isCurrentUser
+                ? [
+                    IconButton(
+                      icon: const Icon(Icons.menu),
+                      onPressed: () => _showMenuSheet(context, isCurrentUser),
+                    ),
+                  ]
+                : null,
+          ),
+          body: ListenableBuilder(
+            listenable: widget.feedService,
+            builder: (context, _) {
+              if (state.isLoading && posts.isEmpty) {
+                return const Skeletonizer(
+                  enabled: true,
+                  enableSwitchAnimation: true,
+                  child: ProfileSkeleton(),
                 );
+              }
 
-          final isPrivateAndHidden =
-              displayUser.isPrivate && !_isCurrentUser && !isFollowing;
-
-          final isLoading = _isLoading;
-          if (isLoading && posts.isEmpty) {
-            return const Skeletonizer(
-              enabled: true,
-              enableSwitchAnimation: true,
-              child: ProfileSkeleton(),
-            );
-          }
-
-          return Skeletonizer(
-            enabled: isLoading,
-            enableSwitchAnimation: true,
-            child: RefreshIndicator(
-              onRefresh: () async {
-                await _fetchProfile();
-                if (_displayUser.isPrivate) {
-                  return;
-                }
-                Future.delayed(const Duration(seconds: 5));
-                await feedService.refreshFeed();
-              },
-              child: ListView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                children: [
-                  const SizedBox(height: 8),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+              return Skeletonizer(
+                enabled: state.isLoading,
+                enableSwitchAnimation: true,
+                child: RefreshIndicator(
+                  onRefresh: () => context.read<ProfileCubit>().refreshProfile(),
+                  child: ListView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
                     children: [
-                      Avatar(url: displayUser.avatarUrl, radius: 40),
-                      const SizedBox(width: 24),
-                      Expanded(
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceAround,
-                          children: [
-                            Stat(
-                              label: formatCount(
-                                liveUser.postsCount > posts.length
-                                    ? liveUser.postsCount
-                                    : posts.length,
-                              ),
-                              value: 'Posts',
-                            ),
-                            Stat(
-                              label: formatCount(liveUser.followers),
-                              value: 'Followers',
-                            ),
-                            Stat(
-                              label: formatCount(liveUser.following),
-                              value: 'Following',
-                            ),
-                          ],
-                        ),
+                      ProfileHeaderWidget(
+                        displayUser: displayUser,
+                        liveUser: liveUser,
+                        postsCount: posts.length,
+                        isCurrentUser: isCurrentUser,
+                        isFollowing: isFollowing,
+                        onEditProfile: () => _openEditProfile(context),
+                        onToggleFollow: () => _toggleFollow(context, displayUser),
                       ),
+                      if (isPrivateAndHidden)
+                        const PrivateProfileWidget()
+                      else
+                        ProfileTabsWidget(
+                          tabController: _tabController,
+                          posts: posts,
+                          feedService: widget.feedService,
+                          displayUser: displayUser,
+                        ),
                     ],
                   ),
-                  const SizedBox(height: 12),
-                  Text(
-                    displayUser.fullName,
-                    style: const TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                  if (displayUser.bio.isNotEmpty) ...[
-                    const SizedBox(height: 2),
-                    Text(
-                      displayUser.bio,
-                      style: TextStyle(color: context.textSecondaryColor),
-                    ),
-                  ],
-                  if (displayUser.website.isNotEmpty) ...[
-                    const SizedBox(height: 4),
-                    GestureDetector(
-                      onTap: () {
-                        ToastHelper.showToast(
-                          context,
-                          "Opening: ${displayUser.website}",
-                        );
-                      },
-                      child: Text(
-                        displayUser.website,
-                        style: const TextStyle(
-                          color: Colors.blue,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ),
-                  ],
-                  const SizedBox(height: 12),
-                  if (_isCurrentUser)
-                    Row(
-                      children: [
-                        Expanded(
-                          child: SizedBox(
-                            height: 32,
-                            child: OutlinedButton(
-                              onPressed: () => _openEditProfile(context),
-                              style: OutlinedButton.styleFrom(
-                                side: BorderSide(
-                                  color: context.borderColor,
-                                  width: 0.8,
-                                ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                padding: EdgeInsets.zero,
-                              ),
-                              child: Text(
-                                'Edit profile',
-                                style: TextStyle(
-                                  color: context.textPrimaryColor,
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 13,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: SizedBox(
-                            height: 32,
-                            child: OutlinedButton(
-                              onPressed: () => ShareHelper.copyProfileLink(
-                                context,
-                                displayUser.username,
-                              ),
-                              style: OutlinedButton.styleFrom(
-                                side: BorderSide(
-                                  color: context.borderColor,
-                                  width: 0.8,
-                                ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                padding: EdgeInsets.zero,
-                              ),
-                              child: Text(
-                                'Share profile',
-                                style: TextStyle(
-                                  color: context.textPrimaryColor,
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 13,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    )
-                  else
-                    SizedBox(
-                      height: 32,
-                      child: OutlinedButton(
-                        onPressed: () => _toggleFollow(context),
-                        style: OutlinedButton.styleFrom(
-                          side: BorderSide(
-                            color: context.borderColor,
-                            width: 0.8,
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                        ),
-                        child: Text(
-                          _buttonLabel(isFollowing),
-                          style: TextStyle(
-                            color: context.textPrimaryColor,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ),
-                  const SizedBox(height: 12),
-                  if (isPrivateAndHidden)
-                    Container(
-                      height: 300,
-                      alignment: Alignment.center,
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.lock_outline,
-                            size: 64,
-                            color: context.textSecondaryColor,
-                          ),
-                          const SizedBox(height: 16),
-                          Text(
-                            'This account is private',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              color: context.textPrimaryColor,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Follow this account to see their photos and videos.',
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: context.textSecondaryColor,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                        ],
-                      ),
-                    )
-                  else ...[
-                    _buildTabBar(),
-                    SizedBox(
-                      height: 420,
-                      child: TabBarView(
-                        controller: _tabController,
-                        children: [
-                          _buildPostsTab(posts),
-                          _buildReelsTab(posts),
-                          _buildTaggedTab(feedService.posts, displayUser),
-                        ],
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          );
-        },
-      ),
+                ),
+              );
+            },
+          ),
+        );
+      },
     );
-  }
-
-  Widget _buildTabBar() {
-    return Container(
-      decoration: BoxDecoration(
-        border: Border(
-          bottom: BorderSide(color: context.borderColor, width: 0.5),
-        ),
-      ),
-      child: TabBar(
-        controller: _tabController,
-        indicatorColor: context.textPrimaryColor,
-        labelColor: context.textPrimaryColor,
-        unselectedLabelColor: context.textSecondaryColor,
-        tabs: const [
-          Tab(icon: Icon(Icons.grid_on_outlined, size: 22)),
-          Tab(icon: Icon(Icons.play_circle_outline, size: 22)),
-          Tab(icon: Icon(Icons.person_pin_outlined, size: 22)),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPostsTab(List<Post> posts) {
-    if (posts.isEmpty) return const EmptyTab(message: 'No posts yet');
-    return GridView.builder(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 3,
-        mainAxisSpacing: 2,
-        crossAxisSpacing: 2,
-      ),
-      itemCount: posts.length,
-      itemBuilder: (context, index) => PostTile(
-        feedService: feedService,
-        post: posts[index],
-        posts: posts,
-        heroTag: 'posts_${posts[index].id}',
-      ),
-    );
-  }
-
-  Widget _buildReelsTab(List<Post> posts) {
-    final reels = posts.where((p) => p.isVideo).toList();
-    if (reels.isEmpty) return const EmptyTab(message: 'No reels yet');
-    return GridView.builder(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 3,
-        mainAxisSpacing: 2,
-        crossAxisSpacing: 2,
-      ),
-      itemCount: reels.length,
-      itemBuilder: (context, index) => PostTile(
-        feedService: feedService,
-        post: reels[index],
-        posts: reels,
-        heroTag: 'reels_${reels[index].id}',
-      ),
-    );
-  }
-
-  Widget _buildTaggedTab(List<Post> allPosts, AppUser displayUser) {
-    final taggedPosts = allPosts.where((p) {
-      return p.taggedUsers.any(
-        (u) =>
-            u.id == displayUser.id ||
-            u.username.toLowerCase() == displayUser.username.toLowerCase(),
-      );
-    }).toList();
-
-    if (taggedPosts.isEmpty) {
-      return const EmptyTab(message: 'Photos and videos of you');
-    }
-    return GridView.builder(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 3,
-        mainAxisSpacing: 2,
-        crossAxisSpacing: 2,
-      ),
-      itemCount: taggedPosts.length,
-      itemBuilder: (context, index) => PostTile(
-        feedService: feedService,
-        post: taggedPosts[index],
-        posts: taggedPosts,
-        heroTag: 'tagged_${taggedPosts[index].id}',
-      ),
-    );
-  }
-
-  String _buttonLabel(bool isFollowing) {
-    if (_isCurrentUser) return 'Edit profile';
-    return isFollowing ? 'Following' : 'Follow';
   }
 
   void _openEditProfile(BuildContext context) {
@@ -518,19 +195,19 @@ class _ProfileScreenState extends State<ProfileScreen>
     }
   }
 
-  void _toggleFollow(BuildContext context) {
+  void _toggleFollow(BuildContext context, AppUser displayUser) {
     final current = widget.authService?.currentUser;
     if (current == null) return;
-    feedService.toggleFollow(current.id, _displayUser.id);
-    final isFollowingNow = feedService.isFollowing(current.id, _displayUser.id);
+    widget.feedService.toggleFollow(current.id, displayUser.id);
+    final isFollowingNow = widget.feedService.isFollowing(current.id, displayUser.id);
     if (isFollowingNow) {
-      ToastHelper.showToast(context, "Following ${_displayUser.username}");
+      ToastHelper.showToast(context, "Following ${displayUser.username}");
     } else {
-      ToastHelper.showToast(context, "Unfollowed ${_displayUser.username}");
+      ToastHelper.showToast(context, "Unfollowed ${displayUser.username}");
     }
   }
 
-  void _showMenuSheet(BuildContext context) {
+  void _showMenuSheet(BuildContext context, bool isCurrentUser) {
     showModalBottomSheet(
       context: context,
       shape: const RoundedRectangleBorder(
@@ -549,7 +226,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
-            if (_isCurrentUser) ..._accountMenuItems(ctx),
+            if (isCurrentUser) ..._accountMenuItems(ctx),
             const SizedBox(height: 8),
           ],
         ),
@@ -610,7 +287,7 @@ class _ProfileScreenState extends State<ProfileScreen>
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (context) => BookmarksScreen(feedService: feedService),
+              builder: (context) => BookmarksScreen(feedService: widget.feedService),
             ),
           );
         },

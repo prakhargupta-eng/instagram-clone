@@ -4,7 +4,8 @@ import 'package:flutter/foundation.dart';
 import '../models/post.dart';
 import '../models/story.dart';
 import '../models/user.dart';
-import 'api_service.dart';
+import '../repositories/post_repository.dart';
+import '../repositories/user_repository.dart';
 import 'local_post_store.dart';
 
 class FeedService extends ChangeNotifier {
@@ -39,53 +40,53 @@ class FeedService extends ChangeNotifier {
       _bookmarkedPosts.removeWhere((p) => p.id == postId);
     } else {
       _bookmarkedPostIds.add(postId);
-      // We don't have the full Post object here to add to _bookmarkedPosts,
-      // but if the user views the bookmarks tab, it will refetch.
-      // Alternatively, we could fetch it if needed.
     }
     notifyListeners();
 
-    try {
-      await ApiService.instance.toggleBookmark(postId);
-    } catch (e) {
-      debugPrint('REST API toggleBookmark error: $e');
-      // Revert if API fails
-      if (wasBookmarked) {
-        _bookmarkedPostIds.add(postId);
-      } else {
-        _bookmarkedPostIds.remove(postId);
-      }
-      notifyListeners();
-    }
+    final result = await PostRepository.instance.toggleBookmark(postId);
+    result.fold(
+      (failure) {
+        debugPrint('REST API toggleBookmark error: ${failure.message}');
+        // Revert if API fails
+        if (wasBookmarked) {
+          _bookmarkedPostIds.add(postId);
+        } else {
+          _bookmarkedPostIds.remove(postId);
+        }
+        notifyListeners();
+      },
+      (_) {},
+    );
   }
 
   Future<void> fetchBookmarks({bool loadMore = false}) async {
     if (loadMore && !_bookmarksHasMore) return;
 
-    try {
-      final pageToLoad = loadMore ? _bookmarksPage + 1 : 1;
-      final posts = await ApiService.instance.getBookmarks(
-        page: pageToLoad,
-        limit: 10,
-      );
+    final pageToLoad = loadMore ? _bookmarksPage + 1 : 1;
+    final result = await PostRepository.instance.getBookmarks(
+      page: pageToLoad,
+      limit: 10,
+    );
 
-      if (!loadMore) {
-        _bookmarkedPosts.clear();
-        _bookmarkedPostIds.clear();
-      }
+    result.fold(
+      (failure) => debugPrint('REST API fetchBookmarks error: ${failure.message}'),
+      (posts) {
+        if (!loadMore) {
+          _bookmarkedPosts.clear();
+          _bookmarkedPostIds.clear();
+        }
 
-      if (posts.isNotEmpty) {
-        _bookmarkedPosts.addAll(posts);
-        _bookmarkedPostIds.addAll(posts.map((p) => p.id));
-        _bookmarksPage = pageToLoad;
-        _bookmarksHasMore = posts.length >= 10;
-      } else {
-        _bookmarksHasMore = false;
-      }
-      notifyListeners();
-    } catch (e) {
-      debugPrint('REST API fetchBookmarks error: $e');
-    }
+        if (posts.isNotEmpty) {
+          _bookmarkedPosts.addAll(posts);
+          _bookmarkedPostIds.addAll(posts.map((p) => p.id));
+          _bookmarksPage = pageToLoad;
+          _bookmarksHasMore = posts.length >= 10;
+        } else {
+          _bookmarksHasMore = false;
+        }
+        notifyListeners();
+      },
+    );
   }
 
   void ensureUserRegistered(AppUser user) {
@@ -123,19 +124,21 @@ class FeedService extends ChangeNotifier {
   Future<void> refreshFeed() async {
     _isLoading = true;
     notifyListeners();
-    try {
-      final remotePosts = await ApiService.instance.getFeedPosts();
-      if (remotePosts.isNotEmpty) {
-        _posts.clear();
-        _posts.addAll(remotePosts);
-        syncBookmarksFromPosts(remotePosts);
-      }
-    } catch (e) {
-      debugPrint('REST API Feed fetch error: $e');
-    } finally {
-      _isLoading = false;
-      notifyListeners();
-    }
+    
+    final result = await PostRepository.instance.getFeedPosts();
+    result.fold(
+      (failure) => debugPrint('REST API Feed fetch error: ${failure.message}'),
+      (remotePosts) {
+        if (remotePosts.isNotEmpty) {
+          _posts.clear();
+          _posts.addAll(remotePosts);
+          syncBookmarksFromPosts(remotePosts);
+        }
+      },
+    );
+    
+    _isLoading = false;
+    notifyListeners();
   }
 
   Future<void> ensureLocalPostsLoaded(AppUser currentUser) async {
@@ -145,17 +148,18 @@ class FeedService extends ChangeNotifier {
     notifyListeners();
     ensureUserRegistered(currentUser);
 
-    try {
-      final remotePosts = await ApiService.instance.getFeedPosts();
-      _posts.clear();
-      _posts.addAll(remotePosts);
-      syncBookmarksFromPosts(remotePosts);
-    } catch (e) {
-      debugPrint('FeedService init REST error: $e');
-    } finally {
-      _isLoading = false;
-      notifyListeners();
-    }
+    final result = await PostRepository.instance.getFeedPosts();
+    result.fold(
+      (failure) => debugPrint('FeedService init REST error: ${failure.message}'),
+      (remotePosts) {
+        _posts.clear();
+        _posts.addAll(remotePosts);
+        syncBookmarksFromPosts(remotePosts);
+      },
+    );
+
+    _isLoading = false;
+    notifyListeners();
   }
 
   List<Post> get posts => List.unmodifiable(_posts);
@@ -208,11 +212,11 @@ class FeedService extends ChangeNotifier {
     }
     notifyListeners();
 
-    try {
-      await ApiService.instance.toggleFollow(followeeId);
-    } catch (e) {
-      debugPrint('REST API toggleFollow error: $e');
-    }
+    final result = await UserRepository.instance.toggleFollow(followeeId);
+    result.fold(
+      (failure) => debugPrint('REST API toggleFollow error: ${failure.message}'),
+      (_) {},
+    );
   }
 
   List<Post> followingFeed(AppUser user) {
@@ -302,11 +306,11 @@ class FeedService extends ChangeNotifier {
       notifyListeners();
     }
 
-    try {
-      await ApiService.instance.toggleLike(postId);
-    } catch (e) {
-      debugPrint('REST API toggleLike error: $e');
-    }
+    final result = await PostRepository.instance.toggleLike(postId);
+    result.fold(
+      (failure) => debugPrint('REST API toggleLike error: ${failure.message}'),
+      (_) {},
+    );
   }
 
   void addComment(String postId, AppUser author, String text) async {
@@ -326,11 +330,11 @@ class FeedService extends ChangeNotifier {
     }
 
     if (text.trim().isNotEmpty) {
-      try {
-        await ApiService.instance.addComment(postId, text);
-      } catch (e) {
-        debugPrint('REST API addComment error: $e');
-      }
+      final result = await PostRepository.instance.addComment(postId, text);
+      result.fold(
+        (failure) => debugPrint('REST API addComment error: ${failure.message}'),
+        (_) {},
+      );
     }
   }
 
@@ -338,20 +342,21 @@ class FeedService extends ChangeNotifier {
     _posts.insert(0, post);
     notifyListeners();
 
-    try {
-      final taggedUserIds = post.taggedUsers.map((u) => u.id).toList();
-      await ApiService.instance.createPost(
-        imageUrl: post.imageUrl,
-        videoUrl: post.videoUrl,
-        caption: post.caption,
-        location: post.location,
-        music: post.music,
-        isVideo: post.isVideo,
-        taggedUserIds: taggedUserIds,
-      );
-    } catch (e) {
-      debugPrint('REST API createPost error: $e');
-    }
+    final taggedUserIds = post.taggedUsers.map((u) => u.id).toList();
+    final result = await PostRepository.instance.createPost(
+      imageUrl: post.imageUrl,
+      videoUrl: post.videoUrl,
+      caption: post.caption,
+      location: post.location,
+      music: post.music,
+      isVideo: post.isVideo,
+      taggedUserIds: taggedUserIds,
+    );
+    
+    result.fold(
+      (failure) => debugPrint('REST API createPost error: ${failure.message}'),
+      (_) {},
+    );
   }
 
   void deletePost(String postId) {
@@ -364,14 +369,15 @@ class FeedService extends ChangeNotifier {
     _stories.insert(0, story);
     notifyListeners();
 
-    try {
-      await ApiService.instance.createStory(
-        imageUrl: story.imageUrl,
-        isVideo: story.isVideo,
-      );
-    } catch (e) {
-      debugPrint('REST API createStory error: $e');
-    }
+    final result = await PostRepository.instance.createStory(
+      imageUrl: story.imageUrl,
+      isVideo: story.isVideo,
+    );
+    
+    result.fold(
+      (failure) => debugPrint('REST API createStory error: ${failure.message}'),
+      (_) {},
+    );
   }
 
   final List<PendingUpload> _pendingUploads = [];

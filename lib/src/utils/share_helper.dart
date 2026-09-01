@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../compontes/ToastHelper.dart';
+import '../components/ToastHelper.dart';
 
 class ShareHelper {
   /// Copies the user's profile URL to the system clipboard and shows a toast notification.

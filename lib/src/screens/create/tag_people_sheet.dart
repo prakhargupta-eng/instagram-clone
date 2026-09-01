@@ -5,7 +5,7 @@ import '../../data/mock_data.dart';
 import '../../models/user.dart';
 import '../../widgets/avatar.dart';
 
-import '../../services/api_service.dart';
+import '../../repositories/user_repository.dart';
 import '../../services/feed_service.dart';
 
 class TagPeopleSheet extends StatefulWidget {
@@ -46,19 +46,22 @@ class _TagPeopleSheetState extends State<TagPeopleSheet> {
       return;
     }
 
-    try {
-      final results = await ApiService.instance.search(query);
-      if (mounted && _query == query) {
-        setState(() {
-          _searchResults = results
-              .where((e) => e is Map<String, dynamic> && e['type'] == 'account')
-              .map((e) => AppUser.fromJson(e as Map<String, dynamic>))
-              .toList();
-          _searching = false;
-        });
-      }
-    } catch (_) {
-      if (mounted) setState(() => _searching = false);
+    final result = await UserRepository.instance.search(query);
+    if (mounted && _query == query) {
+      result.fold(
+        (failure) {
+          setState(() => _searching = false);
+        },
+        (results) {
+          setState(() {
+            _searchResults = results
+                .where((e) => e is Map<String, dynamic> && e['type'] == 'account')
+                .map((e) => AppUser.fromJson(e as Map<String, dynamic>))
+                .toList();
+            _searching = false;
+          });
+        },
+      );
     }
   }
 

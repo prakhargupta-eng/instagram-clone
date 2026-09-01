@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../adaptive_colors.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:instagram_clone/src/compontes/ToastHelper.dart';
+import 'package:instagram_clone/src/components/ToastHelper.dart';
 import 'package:instagram_clone/src/utils/validation.dart';
 
 import '../../constants.dart';

@@ -4,7 +4,8 @@ import 'package:flutter/material.dart';
 import '../../models/user.dart';
 import '../../models/post.dart';
 import '../../services/feed_service.dart';
-import '../../services/api_service.dart';
+import '../../repositories/user_repository.dart';
+import '../../repositories/post_repository.dart';
 
 class SearchViewModel extends ChangeNotifier {
   SearchViewModel({required this.feedService}) {
@@ -106,22 +107,23 @@ class SearchViewModel extends ChangeNotifier {
     _apiQuery = query;
     notifyListeners();
 
-    try {
-      final results = await ApiService.instance.search(query);
-      if (_apiQuery == query) {
-        final users = results
-            .where((e) => e is Map<String, dynamic> && e['type'] == 'account')
-            .map((e) => AppUser.fromJson(e as Map<String, dynamic>))
-            .toList();
-        _apiUsers = users;
-        _isSearching = false;
-        notifyListeners();
-      }
-    } catch (_) {
-      if (_apiQuery == query) {
-        _isSearching = false;
-        notifyListeners();
-      }
+    final result = await UserRepository.instance.search(query);
+    if (_apiQuery == query) {
+      result.fold(
+        (failure) {
+          _isSearching = false;
+          notifyListeners();
+        },
+        (results) {
+          final users = results
+              .where((e) => e is Map<String, dynamic> && e['type'] == 'account')
+              .map((e) => AppUser.fromJson(e as Map<String, dynamic>))
+              .toList();
+          _apiUsers = users;
+          _isSearching = false;
+          notifyListeners();
+        },
+      );
     }
   }
 
@@ -140,18 +142,22 @@ class SearchViewModel extends ChangeNotifier {
     notifyListeners();
     
     if (category != null) {
-      try {
-        _categoryPosts = await ApiService.instance.getExplorePostsByCategory(
-          category,
-          page: 1,
-          limit: 20,
-        );
-        feedService.syncBookmarksFromPosts(_categoryPosts);
-        _categoryHasMore = _categoryPosts.length >= 20;
-        _categoryPage = 3; // Since we fetched 20 items (2 pages of 10)
-      } catch (e) {
-        _categoryPosts = [];
-      }
+      final result = await PostRepository.instance.getExplorePostsByCategory(
+        category,
+        page: 1,
+        limit: 20,
+      );
+      result.fold(
+        (failure) {
+          _categoryPosts = [];
+        },
+        (posts) {
+          _categoryPosts = posts;
+          feedService.syncBookmarksFromPosts(_categoryPosts);
+          _categoryHasMore = _categoryPosts.length >= 20;
+          _categoryPage = 3; // Since we fetched 20 items (2 pages of 10)
+        },
+      );
     } else {
       _categoryPosts = [];
     }
@@ -168,27 +174,30 @@ class SearchViewModel extends ChangeNotifier {
     _isCategoryLoadingMore = true;
     notifyListeners();
 
-    try {
-      final morePosts = await ApiService.instance.getExplorePostsByCategory(
-        _selectedCategory!,
-        page: _categoryPage,
-        limit: 10,
-      );
-      
-      if (morePosts.isEmpty) {
-        _categoryHasMore = false;
-      } else {
-        _categoryPosts.addAll(morePosts);
-        feedService.syncBookmarksFromPosts(morePosts);
-        _categoryHasMore = morePosts.length >= 10;
-        _categoryPage++;
-      }
-    } catch (e) {
-      // Don't decrement page since we only incremented on success
-    } finally {
-      _isCategoryLoadingMore = false;
-      notifyListeners();
-    }
+    final result = await PostRepository.instance.getExplorePostsByCategory(
+      _selectedCategory!,
+      page: _categoryPage,
+      limit: 10,
+    );
+    
+    result.fold(
+      (failure) {
+        // Don't decrement page since we only incremented on success
+      },
+      (morePosts) {
+        if (morePosts.isEmpty) {
+          _categoryHasMore = false;
+        } else {
+          _categoryPosts.addAll(morePosts);
+          feedService.syncBookmarksFromPosts(morePosts);
+          _categoryHasMore = morePosts.length >= 10;
+          _categoryPage++;
+        }
+      },
+    );
+    
+    _isCategoryLoadingMore = false;
+    notifyListeners();
   }
 
   void addRecentSearch(String item) {

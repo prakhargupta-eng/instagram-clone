@@ -13,7 +13,7 @@ import '../../models/story.dart';
 import '../../models/user.dart';
 import '../../services/feed_service.dart';
 import '../../widgets/media_image.dart';
-import '../../compontes/ToastHelper.dart';
+import '../../components/ToastHelper.dart';
 import 'post_editor_screen.dart';
 import 'location_picker_sheet.dart';
 import 'music_picker_sheet.dart';
